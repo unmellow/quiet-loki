@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'child_process'
+import fs from 'fs'
 import crypto from 'crypto'
 import path from 'path'
 import getPort from 'get-port'
@@ -62,6 +63,10 @@ export async function startRuntime(opts: { dataDir?: string; resourcesPath?: str
   const secret = crypto.randomBytes(32).toString('hex')
   const port = await getPort()
   const bundlePath = resolveBackendBundle()
+
+  // Desktop passes -a <appDataPath>; backendManager uses path.join(appDataPath, 'Quiet').
+  // AppModule ORBIT/IPFS factories readdirSync that Quiet dir — create it first.
+  fs.mkdirSync(path.join(dataDir, 'Quiet'), { recursive: true })
 
   const forkArgvs = ['-d', `${port}`, '-a', dataDir, '-r', resourcesPath || path.sep, '-p', 'desktop']
 
