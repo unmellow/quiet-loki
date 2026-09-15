@@ -6,7 +6,9 @@ import getPort from 'get-port'
 import { io, Socket } from 'socket.io-client'
 import {
   composeInvitationDeepUrl,
+  createLibp2pAddress,
   p2pAddressesToPairs,
+  pairsToP2pAddresses,
   parseInvitationLinkDeepUrl,
 } from '@quiet/common'
 import { v4 as uuidv4 } from 'uuid'
@@ -353,6 +355,12 @@ export async function cmdJoin(rt: Runtime, invite: string, username: string): Pr
   }
 
   // Persist identity/community as soon as JOIN succeeds so later channel timeout cannot leave session unsaved.
+  // Prefer invite multiaddrs (with /tcp/<wsPort>/) over a stale community.peerList of bare peerIds.
+  const localAddress = createLibp2pAddress(
+    res.identity.networkInfo.hiddenService.onionAddress,
+    res.identity.networkInfo.peerId.id
+  )
+  const invitePeerAddrs = pairsToP2pAddresses(inviteData.pairs || [])
   rt.session = {
     communityId: res.community.id,
     communityName: res.community.name,
@@ -361,7 +369,7 @@ export async function cmdJoin(rt: Runtime, invite: string, username: string): Pr
     userId: res.identity.userId,
     peerId: res.identity.networkInfo.peerId.id,
     onionAddress: res.identity.networkInfo.hiddenService.onionAddress,
-    peerList: res.community.peerList,
+    peerList: [...new Set([localAddress, ...invitePeerAddrs])],
     username,
   }
   saveSession(rt.dataDir, rt.session)
@@ -415,8 +423,11 @@ export async function cmdSend(rt: Runtime, text: string): Promise<void> {
     channelId: rt.session.generalChannelId,
     userId: rt.session.userId,
   }
-  rt.socket.emit(SocketActions.SEND_MESSAGE, message)
-  console.log(JSON.stringify({ ok: true, id: message.id }, null, 2))
+  // Await backend ack that send was accepted/persisted locally before stopRuntime.
+  const ack: any = await emitWithAck(rt.socket, SocketActions.SEND_MESSAGE, message, 60_000)
+  // Brief pause so orbitdb replication can start before we tear down the process.
+  await new Promise(r => setTimeout(r, 1500))
+  console.log(JSON.stringify({ ok: true, id: message.id, ack }, null, 2))
 }
 
 export async function cmdMessages(rt: Runtime, ids: string[] = []): Promise<void> {

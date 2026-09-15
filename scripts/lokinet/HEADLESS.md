@@ -101,6 +101,8 @@ node lib/cli.js messages
 
 `join` saves `headless-session.json` as soon as `joinCommunity` returns (community/identity fields), then waits for `launchCommunity` (socket ack and/or `communityLaunched`), then updates the session with `generalChannelId` when `channelsStored` arrives. A channel sync timeout no longer leaves the session file missing; `send`/`messages` still need `generalChannelId` once channels arrive.
 
+Session `peerList` is built from invite pairs (`pairsToP2pAddresses`) plus the local multiaddr so same-host dials keep `/tcp/<invite wsPort>/` (e.g. alice `8080`) even when bob’s `LOKINET_WS_PORT` is `8081`. Backend `updatePeerStore` also retains existing peer multiaddrs that already include `/tcp/` instead of rebuilding them with the joiner env port. `send` awaits a Socket.IO ack after local persist before the CLI stops the backend.
+
 ## Architecture
 
 1. CLI forks `backend-bundle` with `-p desktop -d <port> -a <dataDir> -r <resources>`

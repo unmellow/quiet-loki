@@ -746,7 +746,14 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     const community: Community = {
       id: payload.id,
       name: communityName,
-      peerList: [...new Set([localAddress, ...Object.keys(bootstrapPeerStats)])], // TODO: we should deprecate this field and use db
+      peerList: [
+        ...new Set([
+          localAddress,
+          ...Object.values(bootstrapPeerStats)
+            .map(s => s.address)
+            .filter((a): a is string => Boolean(a)),
+        ]),
+      ], // TODO: we should deprecate this field and use db
       inviteData,
       psk: inviteData.psk,
       teamId,
@@ -1319,9 +1326,13 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
         // await this.deleteFilesFromTemporaryDir() //crashes on mobile, will be fixes in next versions
       }
     )
-    this.socketService.on(SocketActions.SEND_MESSAGE, async (args: ChannelMessage) => {
-      await this.storageService?.channels.sendMessage(args)
-    })
+    this.socketService.on(
+      SocketActions.SEND_MESSAGE,
+      async (args: ChannelMessage, callback?: (response?: { id: string }) => void) => {
+        await this.storageService?.channels.sendMessage(args)
+        callback?.({ id: args.id })
+      }
+    )
 
     this.socketService.on(
       SocketActions.GET_MESSAGES,
