@@ -4,7 +4,11 @@ import crypto from 'crypto'
 import path from 'path'
 import getPort from 'get-port'
 import { io, Socket } from 'socket.io-client'
-import { composeInvitationShareUrl, p2pAddressesToPairs, parseInvitationLink } from '@quiet/common'
+import {
+  composeInvitationDeepUrl,
+  p2pAddressesToPairs,
+  parseInvitationLinkDeepUrl,
+} from '@quiet/common'
 import { v4 as uuidv4 } from 'uuid'
 import { defaultDataDir, loadSession, saveSession, type HeadlessSession } from './session'
 
@@ -260,7 +264,7 @@ export function buildInviteUrl(session: HeadlessSession): string {
     throw new Error('Session incomplete — run create (or join) first')
   }
   const pairs = p2pAddressesToPairs(session.peerList.slice(0, 3))
-  return composeInvitationShareUrl({
+  return composeInvitationDeepUrl({
     version: InvitationDataVersion.v4 as any,
     psk: session.psk,
     pairs,
@@ -287,8 +291,22 @@ export async function cmdInvite(rt: Runtime): Promise<void> {
   console.log(buildInviteUrl(rt.session))
 }
 
+/** Accept deep `quiet-loki://?…`, share `quiet-loki://join#…`, or raw query params. */
+function parseInviteInput(invite: string) {
+  let url = invite.trim()
+  if (url.includes('#')) {
+    const hash = url.split('#', 2)[1] || ''
+    url = `quiet-loki://?${hash}`
+  } else if (!url.startsWith('quiet-loki://')) {
+    url = `quiet-loki://?${url.replace(/^\?/, '')}`
+  } else if (url.startsWith('quiet-loki://join?')) {
+    url = url.replace('quiet-loki://join?', 'quiet-loki://?')
+  }
+  return parseInvitationLinkDeepUrl(url)
+}
+
 export async function cmdJoin(rt: Runtime, invite: string, username: string): Promise<void> {
-  const inviteData = parseInvitationLink(invite)
+  const inviteData = parseInviteInput(invite)
   const id = genCommunityId()
   const res: any = await emitWithAck(rt.socket, SocketActions.JOIN_COMMUNITY, {
     id,
