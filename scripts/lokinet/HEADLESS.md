@@ -47,10 +47,10 @@ export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-A
 cd packages/headless
 node lib/cli.js create --name day2 --username alice
 node lib/cli.js invite
-# → quiet-loki://join#…
+# → quiet-loki://?…
 
 export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-B
-node lib/cli.js join --invite 'quiet-loki://join#…' --username bob
+node lib/cli.js join --invite 'quiet-loki://?…' --username bob
 node lib/cli.js send 'hello from B'
 node lib/cli.js messages
 ```
@@ -81,4 +81,4 @@ Loki-only: system lokinet, `LOKINET_WS_PORT`, no Tor wrap, no second lokinet, no
 ## Verified smoke (Arch)
 
 On a machine with system lokinet + `packages/backend-bundle/bundle.cjs`:
-`node lib/cli.js create …` returned `ok: true` with a `#general` channel id, and `invite` printed a `quiet-loki://join#…` URL (psk + 52-char SNApp in `p=`).
+`node lib/cli.js create …` returned `ok: true` with a `#general` channel id, and `invite` printed a `quiet-loki://?…` URL (psk + 52-char SNApp in `p=`).
