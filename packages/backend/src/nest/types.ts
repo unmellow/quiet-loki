@@ -22,6 +22,8 @@ export class ConnectionsManagerOptions {
 
   bootstrapMultiaddrs?: string[] = []
   createPaths?: boolean = true
+  /** When true (or QUIET_HEADLESS=1), Nest does not wait for Electron socket START. */
+  headless?: boolean = false
 }
 
 export class ConfigOptions {

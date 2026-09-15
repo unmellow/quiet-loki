@@ -20,3 +20,5 @@ On startup the backend looks up the SNApp with `host localhost.loki 127.3.2.1`.
 Do **not** enable HTTP on `:1190`. Do **not** spawn a second lokinet — use system Lokinet only.
 
 Two-node join/replicate: see `scripts/lokinet/DAY2-TWO-NODE.md`.
+
+Headless Day 2 client: `scripts/lokinet/HEADLESS.md` (`packages/headless`).
