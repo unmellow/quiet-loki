@@ -1,7 +1,7 @@
 {
   "name": "@quiet/headless",
-  "version": "0.1.0",
-  "description": "Headless Quiet Loki client for Day 2 create/join/#general without Electron",
+  "version": "0.1.1",
+  "description": "Headless Quiet Loki client — forks backend-bundle like desktop (no Nest-in-process)",
   "main": "lib/cli.js",
   "bin": {
     "quiet-loki-headless": "lib/cli.js"
@@ -12,14 +12,10 @@
     "prepare": "npm run build"
   },
   "dependencies": {
-    "@nestjs/core": "^10.0.0",
-    "@quiet/backend": "file:../backend",
     "@quiet/common": "file:../common",
-    "@quiet/types": "file:../types",
+    "backend-bundle": "file:../backend-bundle",
     "commander": "^11.1.0",
     "get-port": "^5.1.1",
-    "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.8.1",
     "socket.io-client": "^4.7.2",
     "uuid": "^9.0.0"
   },
