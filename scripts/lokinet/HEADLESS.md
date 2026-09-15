@@ -101,7 +101,13 @@ node lib/cli.js messages
 
 `join` saves `headless-session.json` as soon as `joinCommunity` returns (community/identity fields), then waits for `launchCommunity` (socket ack and/or `communityLaunched`), then updates the session with `generalChannelId` when `channelsStored` arrives. A channel sync timeout no longer leaves the session file missing; `send`/`messages` still need `generalChannelId` once channels arrive.
 
-Session `peerList` is built from invite pairs (`pairsToP2pAddresses`) plus the local multiaddr so same-host dials keep `/tcp/<invite wsPort>/` (e.g. alice `8080`) even when bob’s `LOKINET_WS_PORT` is `8081`. Backend `updatePeerStore` also retains existing peer multiaddrs that already include `/tcp/` instead of rebuilding them with the joiner env port. `send` awaits a Socket.IO ack after local persist before the CLI stops the backend.
+Session `peerList` is built from invite pairs (`pairsToP2pAddresses`) plus the local multiaddr so same-host dials keep `/tcp/<invite wsPort>/` (e.g. alice `8080`) even when bob’s `LOKINET_WS_PORT` is `8081`.
+
+Backend peer store (same-host storage relaunch):
+- On community `launch`, invite `pairs` are re-seeded into `PEERS` **before** libp2p dials, so a relaunch dials invite `/tcp/<wsPort>/` even if LevelDB had a bad joiner-port address.
+- `updatePeerStore` starts from a copy of existing peers (does not drop bootstrap invite peers missing from profiles yet), prefers invite `wsPort` over an existing `/tcp/` whose port differs, and only falls back to env `LOKINET_WS_PORT` synthesis when neither invite nor an existing `/tcp/` address is available.
+
+`messages` with no `--ids` issues `GET_MESSAGES` (ids omitted/`undefined` → load all OrbitDB entries) after waiting for `communityLaunched`; live `MESSAGES_STORED` is only a short fallback. `send`/`messages` both wait for launch on storage relaunch. `send` awaits a Socket.IO ack after local persist before the CLI stops the backend.
 
 ## Architecture
 

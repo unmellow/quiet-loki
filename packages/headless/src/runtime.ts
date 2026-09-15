@@ -308,7 +308,6 @@ function parseInviteInput(invite: string) {
   return parseInvitationLinkDeepUrl(url)
 }
 
-
 /** Resolves when launchCommunity acks or COMMUNITY_LAUNCHED fires (whichever first). */
 function waitForCommunityLaunch(socket: Socket, communityId: string, timeoutMs = 180_000): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -329,14 +328,12 @@ function waitForCommunityLaunch(socket: Socket, communityId: string, timeoutMs =
       timeoutMs
     )
     socket.on(SocketEvents.COMMUNITY_LAUNCHED, onLaunched)
-    ;(socket as any).timeout(timeoutMs).emit(
-      SocketActions.LAUNCH_COMMUNITY,
-      { id: communityId },
-      (err: Error | null) => {
+    ;(socket as any)
+      .timeout(timeoutMs)
+      .emit(SocketActions.LAUNCH_COMMUNITY, { id: communityId }, (err: Error | null) => {
         if (err) finish(reject, err)
         else finish(resolve)
-      }
-    )
+      })
   })
 }
 
@@ -415,6 +412,10 @@ export async function cmdSend(rt: Runtime, text: string): Promise<void> {
   if (!rt.session.generalChannelId || !rt.session.userId) {
     throw new Error('No #general channel in session — create/join first and wait for channel sync')
   }
+  // Storage relaunch: wait until community is launched before sending.
+  if (rt.session.communityId) {
+    await waitForCommunityLaunch(rt.socket, rt.session.communityId)
+  }
   const message = {
     id: uuidv4(),
     type: MessageTypeBasic,
@@ -435,7 +436,12 @@ export async function cmdMessages(rt: Runtime, ids: string[] = []): Promise<void
     throw new Error('Session incomplete for messages')
   }
 
+  // Wait for storage relaunch so GET_MESSAGES hits an initialized channel store.
+  await waitForCommunityLaunch(rt.socket, rt.session.communityId)
+
   if (ids.length === 0) {
+    // Live MESSAGES_STORED is optional; GET of existing OrbitDB entries is the source of truth.
+    // Pass ids: undefined (not []) — getEntries treats [] as a filter that matches nothing.
     const collected: any[] = []
     const onStored = (payload: any) => {
       for (const m of payload.messages || []) {
@@ -443,8 +449,20 @@ export async function cmdMessages(rt: Runtime, ids: string[] = []): Promise<void
       }
     }
     rt.socket.on(SocketEvents.MESSAGES_STORED, onStored)
-    await new Promise(r => setTimeout(r, 3000))
+    const res: any = await emitWithAck(rt.socket, SocketActions.GET_MESSAGES, {
+      ids: undefined,
+      peerId: rt.session.peerId,
+      channelId: rt.session.generalChannelId,
+      communityId: rt.session.communityId,
+    })
+    await new Promise(r => setTimeout(r, 500))
     rt.socket.off(SocketEvents.MESSAGES_STORED, onStored)
+    const fromGet: any[] = res?.messages || []
+    if (fromGet.length > 0) {
+      console.log(JSON.stringify(fromGet, null, 2))
+      return
+    }
+    // Fall back to any live events if GET returned empty (store still warming).
     console.log(JSON.stringify(collected, null, 2))
     return
   }

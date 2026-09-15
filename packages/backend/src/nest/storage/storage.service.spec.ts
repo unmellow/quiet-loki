@@ -309,6 +309,7 @@ describe('StorageService', () => {
       } as Record<string, NetworkStats>
       const userId = sigchainService.user.userId
       jest.spyOn(localDbService, 'getPeerStats').mockResolvedValue(existingPeerStats as any)
+      jest.spyOn(localDbService, 'getCurrentCommunity').mockResolvedValue(undefined as any)
 
       const members = [{ userId }]
       jest.spyOn(sigchainService, 'getActiveChain').mockReturnValue({
@@ -332,6 +333,8 @@ describe('StorageService', () => {
       const expectedMultiaddr = `/dns4/addr1.onion/tcp/80/ws/p2p/peer1`
       await waitForExpect(async () => expect(setPeerStatsSpy).toHaveBeenCalledTimes(1), 5_000)
       const arg = setPeerStatsSpy.mock.calls[0][0]
+      expect(arg['peerOld']).toBeDefined()
+      expect(arg['peerOld'].address).toEqual('/dns4/oldpeer.onion/tcp/80/ws/p2p/peerOld')
       expect(arg['peer1']).toBeDefined()
       expect(arg['peer1'].peerId).toEqual('peer1')
       expect(arg['peer1'].address).toEqual(expectedMultiaddr)
@@ -349,6 +352,7 @@ describe('StorageService', () => {
       } as Record<string, NetworkStats>
       const userId = sigchainService.user.userId
       jest.spyOn(localDbService, 'getPeerStats').mockResolvedValue(existingPeerStats as any)
+      jest.spyOn(localDbService, 'getCurrentCommunity').mockResolvedValue(undefined as any)
 
       const members = [{ userId }]
       jest.spyOn(sigchainService, 'getActiveChain').mockReturnValue({
@@ -373,6 +377,77 @@ describe('StorageService', () => {
       const arg = setPeerStatsSpy.mock.calls[0][0]
       expect(arg['peer1'].address).toEqual('/dns4/alice.loki/tcp/8080/ws/p2p/peer1')
       expect(arg['peer1'].connectionTime).toEqual(5)
+    })
+
+    it('updatePeerStore prefers invite wsPort over env-synthesized existing address', async () => {
+      await storageService.init()
+      // Corrupted peer store: joiner LOKINET_WS_PORT=8081 was baked into Alice's address
+      const existingPeerStats = {
+        peer1: {
+          peerId: 'peer1',
+          address: '/dns4/alice.loki/tcp/8081/ws/p2p/peer1',
+          lastSeen: 2,
+          connectionTime: 3,
+        },
+      } as Record<string, NetworkStats>
+      const userId = sigchainService.user.userId
+      jest.spyOn(localDbService, 'getPeerStats').mockResolvedValue(existingPeerStats as any)
+      jest.spyOn(localDbService, 'getCurrentCommunity').mockResolvedValue({
+        id: 'community-1',
+        inviteData: {
+          pairs: [{ peerId: 'peer1', onionAddress: 'alice.loki', wsPort: 8080 }],
+        },
+      } as any)
+
+      const members = [{ userId }]
+      jest.spyOn(sigchainService, 'getActiveChain').mockReturnValue({
+        team: {
+          members: () => members,
+        },
+      } as any)
+
+      const userProfiles = [
+        {
+          userId,
+          userData: { onionAddress: 'alice.loki', peerId: 'peer1' },
+        },
+      ] as any
+      jest.spyOn(userProfileStore, 'getUserProfiles').mockResolvedValue(userProfiles)
+
+      const setPeerStatsSpy = jest.spyOn(localDbService, 'setPeerStats')
+
+      await storageService.updatePeerStore()
+
+      await waitForExpect(async () => expect(setPeerStatsSpy).toHaveBeenCalledTimes(1), 5_000)
+      const arg = setPeerStatsSpy.mock.calls[0][0]
+      expect(arg['peer1'].address).toEqual('/dns4/alice.loki/tcp/8080/ws/p2p/peer1')
+      expect(arg['peer1'].connectionTime).toEqual(3)
+    })
+
+    it('updatePeerStore seeds invite pair peers even before profiles exist', async () => {
+      await storageService.init()
+      jest.spyOn(localDbService, 'getPeerStats').mockResolvedValue({} as any)
+      jest.spyOn(localDbService, 'getCurrentCommunity').mockResolvedValue({
+        id: 'community-1',
+        inviteData: {
+          pairs: [{ peerId: 'alicePeer', onionAddress: 'alice.loki', wsPort: 8080 }],
+        },
+      } as any)
+
+      jest.spyOn(sigchainService, 'getActiveChain').mockReturnValue({
+        team: {
+          members: () => [],
+        },
+      } as any)
+      jest.spyOn(userProfileStore, 'getUserProfiles').mockResolvedValue([])
+
+      const setPeerStatsSpy = jest.spyOn(localDbService, 'setPeerStats')
+
+      await storageService.updatePeerStore()
+
+      await waitForExpect(async () => expect(setPeerStatsSpy).toHaveBeenCalledTimes(1), 5_000)
+      const arg = setPeerStatsSpy.mock.calls[0][0]
+      expect(arg['alicePeer'].address).toEqual('/dns4/alice.loki/tcp/8080/ws/p2p/alicePeer')
     })
 
     it('purgeData continues when a data directory is locked', async () => {
