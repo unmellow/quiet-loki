@@ -140,16 +140,23 @@ async function connectSocket(
         })
       })
 
-      const ready = new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('timeout waiting for torInitialized (backend ready)')), 60_000)
+      // START unblocks SocketService; ConnectionsManager attaches listeners in its own
+      // onModuleInit right after. torInitialized only fires when a community launches,
+      // so for a cold create we wait briefly for Nest to finish wiring listeners.
+      const ready = new Promise<void>(resolve => {
+        let settled = false
         const done = () => {
-          clearTimeout(t)
+          if (settled) return
+          settled = true
           socket.off(SocketEvents.TOR_INITIALIZED, done)
+          socket.off('connectionProcess', onProcess)
           resolve()
         }
+        const onProcess = () => done()
         socket.on(SocketEvents.TOR_INITIALIZED, done)
-        // Unblock Nest SocketService.init (waits for START), then CM emits torInitialized.
+        socket.on('connectionProcess', onProcess)
         socket.emit(SocketActions.START)
+        setTimeout(done, 2500)
       })
 
       return { socket, ready }
