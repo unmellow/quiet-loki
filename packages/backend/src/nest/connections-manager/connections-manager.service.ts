@@ -890,6 +890,30 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
       throw new Error(ErrorMessages.IDENTITY_NOT_FOUND)
     }
 
+    // Re-seed invite multiaddrs into PEERS before libp2p dials. Storage relaunch
+    // must dial invite wsPort (e.g. alice /tcp/8080/) even if PEERS was corrupted
+    // by an earlier env-synthesized address (joiner LOKINET_WS_PORT=8081).
+    const invitePairs = community.inviteData?.pairs
+    if (invitePairs?.length) {
+      const existingPeers = (await this.localDbService.getPeerStats()) || {}
+      const bootstrapPeerStats: Record<string, NetworkStats> = {}
+      for (const pair of invitePairs) {
+        const multiaddr = createLibp2pAddress(pair.onionAddress, pair.peerId, pair.wsPort)
+        const prev = existingPeers[pair.peerId]
+        bootstrapPeerStats[pair.peerId] = {
+          peerId: pair.peerId,
+          address: multiaddr,
+          connectionTime: prev?.connectionTime ?? 0,
+          lastSeen: prev?.lastSeen ?? DateTime.utc().toSeconds(),
+        }
+      }
+      await this.localDbService.updatePeerStats(bootstrapPeerStats)
+      this.logger.info(
+        'Re-seeded invite peer stats before dial',
+        Object.values(bootstrapPeerStats).map(s => s.address)
+      )
+    }
+
     const onionAddress = await this.spawnTorHiddenService(community.id, identity)
 
     const peerIdData: CreatedLibp2pPeerId = {

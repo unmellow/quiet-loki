@@ -375,10 +375,55 @@ export class StorageService extends EventEmitter {
   }
 
   public async updatePeerStore() {
-    const members: Member[] | undefined = this.sigchainService.getActiveChain().team?.members()
-    if (!members) return
-    // existing peers uses the peerId as the key
-    const existingPeers = await this.localDbService.getPeerStats()
+    const members: Member[] = this.sigchainService.getActiveChain().team?.members() ?? []
+    // existing peers uses the peerId as the key — keep a copy so bootstrap invite
+    // peers that are not yet in user profiles are not dropped by setPeerStats.
+    const existingPeers = (await this.localDbService.getPeerStats()) || {}
+    const community = await this.localDbService.getCurrentCommunity()
+    const invitePairs = community?.inviteData?.pairs ?? []
+    const inviteByPeerId = new Map(invitePairs.map(pair => [pair.peerId, pair]))
+
+    const tcpPortOf = (address?: string): number | undefined => {
+      if (!address) return undefined
+      const match = address.match(/\/tcp\/(\d+)\//)
+      return match ? Number(match[1]) : undefined
+    }
+
+    const resolveAddress = (peerId: string, onionAddress: string, existingAddress?: string): string => {
+      const invite = inviteByPeerId.get(peerId)
+      if (invite?.wsPort != null) {
+        return createLibp2pAddress(invite.onionAddress || onionAddress, peerId, invite.wsPort)
+      }
+      if (existingAddress && existingAddress.includes('/tcp/')) {
+        return existingAddress
+      }
+      return createLibp2pAddress(onionAddress, peerId)
+    }
+
+    const peers: Record<string, NetworkStats> = { ...existingPeers }
+
+    // Always ensure every invite pair is present with the invite multiaddr
+    // (corrects previously corrupted /tcp/ ports that differ from invite wsPort).
+    for (const pair of invitePairs) {
+      const inviteAddr = createLibp2pAddress(pair.onionAddress, pair.peerId, pair.wsPort)
+      const existing = peers[pair.peerId]
+      if (!existing) {
+        peers[pair.peerId] = {
+          peerId: pair.peerId,
+          address: inviteAddr,
+          lastSeen: DateTime.utc().toSeconds(),
+          connectionTime: 0,
+        }
+        continue
+      }
+      const existingPort = tcpPortOf(existing.address)
+      if (pair.wsPort != null && (existingPort !== pair.wsPort || !existing.address?.includes('/tcp/'))) {
+        peers[pair.peerId] = { ...existing, address: inviteAddr }
+      } else if (!existing.address?.includes('/tcp/')) {
+        peers[pair.peerId] = { ...existing, address: inviteAddr }
+      }
+    }
+
     // filter user profiles to only those that are in the team
     const currentUserData = (await this.userProfileStore.getUserProfiles())
       .filter(profile => {
@@ -388,23 +433,12 @@ export class StorageService extends EventEmitter {
       .filter((userData): userData is UserData => {
         return !!userData
       })
-    // if existing peers has an entry for the user, use that
-    // otherwise, create a new entry
-    const peers: Record<string, NetworkStats> = {}
+
     for (const userData of currentUserData) {
-      const existingStats = existingPeers[userData.peerId]
-      const existingAddress = existingStats?.address
-      // Keep a known-good dial address (e.g. invite wsPort /tcp/8080/) — do not
-      // rebuild with this node's LOKINET_WS_PORT and clobber the peer store.
-      let multiaddr: string
-      if (existingAddress && existingAddress.includes('/tcp/')) {
-        multiaddr = existingAddress
-      } else {
-        multiaddr = createLibp2pAddress(userData.onionAddress, userData.peerId)
-      }
+      const existingStats = peers[userData.peerId]
+      const multiaddr = resolveAddress(userData.peerId, userData.onionAddress, existingStats?.address)
       if (existingStats) {
-        peers[userData.peerId] = existingPeers[userData.peerId]
-        peers[userData.peerId].address = multiaddr
+        peers[userData.peerId] = { ...existingStats, address: multiaddr }
       } else {
         peers[userData.peerId] = {
           peerId: userData.peerId,
