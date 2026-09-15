@@ -287,12 +287,19 @@ const validatePeerAddresses: InvitationLinkUrlNamedParamValidatorFun<InvitationD
 
   const stringPairs = value.split(';')
   stringPairs.forEach(stringPair => {
-    const [peerId, onionAddress] = stringPair.split(',')
+    const [peerId, onionAddress, portStr] = stringPair.split(',')
     if (!validatePeerData({ peerId, onionAddress })) return
-    pairs.push({
+    const pair: InvitationPair = {
       peerId,
       onionAddress,
-    })
+    }
+    if (portStr !== undefined && portStr !== '') {
+      const wsPort = Number(portStr)
+      if (Number.isInteger(wsPort) && wsPort > 0 && wsPort <= 65535) {
+        pair.wsPort = wsPort
+      }
+    }
+    pairs.push(pair)
   })
 
   if (pairs.length === 0) {

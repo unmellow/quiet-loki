@@ -8,6 +8,8 @@ export enum LoadingPanelType {
 export type InvitationPair = {
   peerId: string
   onionAddress: string
+  /** Remote peer libp2p/WebSocket listen port from invite; omit when same as default LOKINET_WS_PORT */
+  wsPort?: number
 }
 
 export enum InvitationDataVersion {

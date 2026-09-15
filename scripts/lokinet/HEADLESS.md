@@ -9,7 +9,7 @@ Repo: `unmellow/quiet-loki` only.
 ```bash
 systemctl is-active lokinet
 host localhost.loki 127.3.2.1
-export LOKINET_WS_PORT=8080   # same on every peer
+export LOKINET_WS_PORT=8080   # two-host Day 2: same port on every peer
 ./scripts/lokinet/day2-preflight.sh
 ```
 
@@ -40,6 +40,10 @@ npm run build
 
 ## Run
 
+### Two-host (intended Day 2 path)
+
+Use the **same** `LOKINET_WS_PORT` on both machines (different SNApps). Invite `p=` may omit or include the port; dial uses the invite port when present, otherwise the joiner env default — matching ports keep this working.
+
 ```bash
 export LOKINET_WS_PORT=8080
 export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-A
@@ -56,6 +60,29 @@ node lib/cli.js messages
 ```
 
 Or pass `--data-dir` on each command.
+
+### Same-host smoke (two processes, one lokinet)
+
+Alice and bob cannot both bind the same TCP port. Alice listens on **8080** and keeps the community up with `serve`; bob listens on **8081**. The invite must carry alice’s listen port (`p=peerId,snapp,8080`); bob dials that invite port, **not** his own `LOKINET_WS_PORT`.
+
+```bash
+# Terminal A
+export LOKINET_WS_PORT=8080
+export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-A
+cd packages/headless
+node lib/cli.js create --name day2 --username alice
+node lib/cli.js invite
+# → quiet-loki://?…&p=<peerId>,<snapp>,8080&…
+node lib/cli.js serve
+
+# Terminal B
+export LOKINET_WS_PORT=8081
+export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-B
+cd packages/headless
+node lib/cli.js join --invite 'quiet-loki://?…' --username bob
+node lib/cli.js send 'hello from B'
+node lib/cli.js messages
+```
 
 ### Commands
 

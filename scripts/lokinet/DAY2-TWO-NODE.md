@@ -16,7 +16,7 @@ host localhost.loki 127.3.2.1
 
 3. Quiet Loki built from `develop` (Day 1+). Desktop invite/QR must be `quiet-loki://join#…`.
 
-4. **Listen port** — both peers must use the **same** `LOKINET_WS_PORT`:
+4. **Listen port** — for two-host Day 2 both peers must use the **same** `LOKINET_WS_PORT` (different SNApps). Same-host two-process smoke can use different ports if the invite includes the owner’s `wsPort` (see `HEADLESS.md`):
 
 ```bash
 # privileged / packaged with cap_net_bind_service:
