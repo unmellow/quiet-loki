@@ -1,0 +1,36 @@
+{
+  "name": "@quiet/headless",
+  "version": "0.1.0",
+  "description": "Headless Quiet Loki client for Day 2 create/join/#general without Electron",
+  "main": "lib/cli.js",
+  "bin": {
+    "quiet-loki-headless": "lib/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node lib/cli.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@nestjs/core": "^10.0.0",
+    "@quiet/backend": "file:../backend",
+    "@quiet/common": "file:../common",
+    "@quiet/types": "file:../types",
+    "commander": "^11.1.0",
+    "get-port": "^5.1.1",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1",
+    "socket.io-client": "^4.7.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^4.9.5"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "license": "GPL-3.0-or-later"
+}

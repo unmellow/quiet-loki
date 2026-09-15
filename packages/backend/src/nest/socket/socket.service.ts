@@ -76,6 +76,8 @@ export class SocketService extends EventEmitter implements OnModuleInit {
   }
 
   public async init() {
+    const headless = process.env.QUIET_HEADLESS === '1'
+
     const connection = new Promise<void>(resolve => {
       this.serverIoProvider.io.on(SocketActions.CONNECTION, socket => {
         socket.on(SocketActions.START, async () => {
@@ -85,6 +87,12 @@ export class SocketService extends EventEmitter implements OnModuleInit {
     })
 
     await this.listen()
+
+    if (headless) {
+      this.logger.info('init: Headless mode — not waiting for Electron START')
+      this.resolveReadyness()
+      return
+    }
 
     this.logger.info('init: Waiting for frontend to connect')
     await connection

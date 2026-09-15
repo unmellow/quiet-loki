@@ -63,3 +63,7 @@ sudo tcpdump -ni lokitun0 port 8080
 - [ ] Invite `p=` is 52-char SNApp
 - [ ] B sees `#general` from A over Lokinet
 - [ ] No Tor SOCKS / no second lokinet / no HTTP `:1190`
+
+## Headless (no GUI)
+
+See `HEADLESS.md` for the `@quiet/headless` CLI used by AI agents.
