@@ -41,6 +41,7 @@ import {
   InitCommunityPayload,
   ResponseCreateCommunityPayload,
   ResponseJoinCommunityPayload,
+  ResponseLaunchCommunityPayload,
   RequestInvitePayload,
   ResponseInvitePayload,
   LaunchCommunityPayload,
@@ -98,6 +99,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
   private hibernating = false
   private hibernateInFlight: Promise<void> | null = null
   private wakeInFlight: Promise<void> | null = null
+  private launchInFlight: Promise<void> | null = null
   private storedCommunityInitialization: Promise<void> | undefined
   private ports: GetPorts
   isTorInit: TorInitState = TorInitState.NOT_STARTED
@@ -786,16 +788,31 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
       return
     }
     await this.localDbService.setCurrentCommunityId(id)
-    if ([ServiceState.LAUNCHING, ServiceState.LAUNCHED].includes(this.communityState)) {
-      this.logger.error(
-        'Cannot launch community more than once.' +
-          ' Community has already been launched or is currently being launched.'
-      )
+
+    // Headless/desktop may re-emit launch after join; ack path needs a successful resolve.
+    if (this.communityState === ServiceState.LAUNCHED) {
+      this.logger.info(`Community ${id} already launched — treating as success for caller`)
+      this.serverIoProvider.io.emit(SocketEvents.COMMUNITY_LAUNCHED, {
+        id: community.id,
+      } as LaunchCommunityPayload)
       return
     }
+    if (this.communityState === ServiceState.LAUNCHING && this.launchInFlight) {
+      this.logger.info(`Community ${id} launch already in progress — awaiting completion`)
+      await this.launchInFlight
+      return
+    }
+
     this.communityState = ServiceState.LAUNCHING
     this.logger.info(`Community state is now ${this.communityState}`)
 
+    this.launchInFlight = this.executeLaunchCommunity(community).finally(() => {
+      this.launchInFlight = null
+    })
+    await this.launchInFlight
+  }
+
+  private async executeLaunchCommunity(community: Community): Promise<void> {
     if (community.name) {
       try {
         this.logger.info('Loading sigchain for community', community.name)
@@ -811,6 +828,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
           trace: (e as Error).stack,
         })
         await this.localDbService.deleteCommunity(community.id)
+        this.communityState = ServiceState.DEFAULT
         return
       }
     } else {
@@ -1188,10 +1206,22 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
       this.logger.info(`socketService - ${SocketActions.CONNECTION}`)
     })
 
-    this.socketService.on(SocketActions.LAUNCH_COMMUNITY, (args: LaunchCommunityPayload) => {
-      this.logger.info(`socketService - ${SocketActions.LAUNCH_COMMUNITY}`)
-      this.launchCommunity(args.id)
-    })
+    this.socketService.on(
+      SocketActions.LAUNCH_COMMUNITY,
+      async (
+        args: LaunchCommunityPayload,
+        callback?: (response: ResponseLaunchCommunityPayload | undefined) => void
+      ) => {
+        this.logger.info(`socketService - ${SocketActions.LAUNCH_COMMUNITY}`)
+        try {
+          await this.launchCommunity(args.id)
+          callback?.({ id: args.id })
+        } catch (e) {
+          this.logger.error('Error while handling launch community request', e)
+          callback?.(undefined)
+        }
+      }
+    )
 
     this.socketService.on(
       SocketActions.CREATE_COMMUNITY,

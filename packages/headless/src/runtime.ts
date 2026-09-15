@@ -27,6 +27,7 @@ const SocketEvents = {
   CHANNELS_STORED: 'channelsStored',
   MESSAGES_STORED: 'messagesStored',
   TOR_INITIALIZED: 'torInitialized',
+  COMMUNITY_LAUNCHED: 'communityLaunched',
 } as const
 
 const InvitationDataVersion = { v4: 'v4' } as const
@@ -305,6 +306,38 @@ function parseInviteInput(invite: string) {
   return parseInvitationLinkDeepUrl(url)
 }
 
+
+/** Resolves when launchCommunity acks or COMMUNITY_LAUNCHED fires (whichever first). */
+function waitForCommunityLaunch(socket: Socket, communityId: string, timeoutMs = 180_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let done = false
+    const finish = (fn: (v?: any) => void, v?: any) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      socket.off(SocketEvents.COMMUNITY_LAUNCHED, onLaunched)
+      fn(v)
+    }
+    const onLaunched = (payload: any) => {
+      if (payload?.id && payload.id !== communityId) return
+      finish(resolve)
+    }
+    const timer = setTimeout(
+      () => finish(reject, new Error(`Timeout waiting for launchCommunity / communityLaunched`)),
+      timeoutMs
+    )
+    socket.on(SocketEvents.COMMUNITY_LAUNCHED, onLaunched)
+    ;(socket as any).timeout(timeoutMs).emit(
+      SocketActions.LAUNCH_COMMUNITY,
+      { id: communityId },
+      (err: Error | null) => {
+        if (err) finish(reject, err)
+        else finish(resolve)
+      }
+    )
+  })
+}
+
 export async function cmdJoin(rt: Runtime, invite: string, username: string): Promise<void> {
   const inviteData = parseInviteInput(invite)
   const id = genCommunityId()
@@ -318,8 +351,8 @@ export async function cmdJoin(rt: Runtime, invite: string, username: string): Pr
   if (!res?.community || !res.identity) {
     throw new Error(`joinCommunity failed: ${JSON.stringify(res)}`)
   }
-  await emitWithAck(rt.socket, SocketActions.LAUNCH_COMMUNITY, { id: res.community.id })
 
+  // Persist identity/community as soon as JOIN succeeds so later channel timeout cannot leave session unsaved.
   rt.session = {
     communityId: res.community.id,
     communityName: res.community.name,
@@ -332,6 +365,9 @@ export async function cmdJoin(rt: Runtime, invite: string, username: string): Pr
     username,
   }
   saveSession(rt.dataDir, rt.session)
+
+  // Backend acks launchCommunity; also accept COMMUNITY_LAUNCHED so a missed ack still unblocks join.
+  await waitForCommunityLaunch(rt.socket, res.community.id)
 
   await new Promise<void>(resolve => {
     const onChannels = (payload: any) => {
@@ -347,6 +383,7 @@ export async function cmdJoin(rt: Runtime, invite: string, username: string): Pr
     }
     rt.socket.on(SocketEvents.CHANNELS_STORED, onChannels)
     setTimeout(() => {
+      // Session already saved after JOIN; channel id is best-effort.
       rt.socket.off(SocketEvents.CHANNELS_STORED, onChannels)
       resolve()
     }, 20_000)

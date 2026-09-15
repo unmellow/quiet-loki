@@ -96,6 +96,11 @@ node lib/cli.js messages
 | `status` | Session + backend PID |
 | `serve` | Keep backend-bundle alive |
 
+
+## Join flow notes
+
+`join` saves `headless-session.json` as soon as `joinCommunity` returns (community/identity fields), then waits for `launchCommunity` (socket ack and/or `communityLaunched`), then updates the session with `generalChannelId` when `channelsStored` arrives. A channel sync timeout no longer leaves the session file missing; `send`/`messages` still need `generalChannelId` once channels arrive.
+
 ## Architecture
 
 1. CLI forks `backend-bundle` with `-p desktop -d <port> -a <dataDir> -r <resources>`
