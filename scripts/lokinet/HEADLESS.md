@@ -1,58 +1,79 @@
 # Headless Quiet Loki (Day 2)
 
-AI-agent / no-GUI client for create → invite → join → `#general` over **system Lokinet**.
+CLI that **forks `packages/backend-bundle/bundle.cjs`** (same entrypoint as desktop), then drives create / invite / join / `#general` over Socket.IO. No Electron UI.
 
-Repo: `unmellow/quiet-loki` only (never TryQuiet/quiet).
+Repo: `unmellow/quiet-loki` only.
 
 ## Prerequisites
-
-Same as `DAY2-TWO-NODE.md`:
 
 ```bash
 systemctl is-active lokinet
 host localhost.loki 127.3.2.1
-export LOKINET_WS_PORT=8080   # unprivileged; same on every peer
+export LOKINET_WS_PORT=8080   # same on every peer
 ./scripts/lokinet/day2-preflight.sh
 ```
 
-Build the monorepo once (`npm run bootstrap` / your usual Quiet Loki build) so `@quiet/backend` and friends resolve.
+You need a built backend bundle and built `@quiet/common`:
+
+```bash
+# from repo root (existing Quiet Loki build is fine)
+ls packages/backend-bundle/bundle.cjs   # required (~20MB webpack output)
+ls packages/common/lib/index.js         # required
+```
+
+If `bundle.cjs` is missing:
+
+```bash
+lerna run --scope @quiet/backend webpack:prod
+# or your usual desktop/backend build that syncs into backend-bundle
+```
+
+## Install + build headless only
+
+```bash
+cd packages/headless
+npm install
+npm run build
+```
+
+`npm install` links `backend-bundle` and `@quiet/common` via `file:../…`.
 
 ## Run
 
-From the repo root after packages are built:
-
 ```bash
 export LOKINET_WS_PORT=8080
-export QUIET_HEADLESS=1
 export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-A
 
 cd packages/headless
-npm run build
 node lib/cli.js create --name day2 --username alice
 node lib/cli.js invite
-# → quiet-loki://join#p=…
+# → quiet-loki://join#…
 
-# peer B
 export QUIET_HEADLESS_DATA_DIR=$HOME/.config/QuietHeadless-B
 node lib/cli.js join --invite 'quiet-loki://join#…' --username bob
 node lib/cli.js send 'hello from B'
 node lib/cli.js messages
 ```
 
+Or pass `--data-dir` on each command.
+
 ### Commands
 
 | Command | Purpose |
 |---|---|
-| `create -n <name> -u <user>` | Create Loki-only community + `#general` |
+| `create -n <name> -u <user>` | Create community + `#general` |
 | `invite` | Print `quiet-loki://` invite |
 | `join -i <url> -u <user>` | Join via invite |
 | `send <text>` | Send to `#general` |
-| `messages [--ids id1,id2]` | List/fetch `#general` messages |
-| `status` | Session + env |
-| `serve` | Keep backend alive |
+| `messages [--ids …]` | List/fetch `#general` |
+| `status` | Session + backend PID |
+| `serve` | Keep backend-bundle alive |
 
-Uses Nest backend with `QUIET_HEADLESS=1` (no Electron, no Tor wrap, no second lokinet, no `:1190`).
+## Architecture
 
-## Verification
+1. CLI forks `backend-bundle` with `-p desktop -d <port> -a <dataDir> -r <resources>`
+2. Sends socket secret over IPC (`readyForSecret` / `set-socket-secret`) — same as Electron main
+3. Connects `socket.io-client` with `Authorization: Bearer <secret>` and emits `start`
+4. Uses SocketActions create/join/channel/message
 
-quiet loki can start Day 2 verification from this entrypoint once both peers pass preflight and share an invite from `invite`.
+Loki-only: system lokinet, `LOKINET_WS_PORT`, no Tor wrap, no second lokinet, no `:1190`.
