@@ -392,8 +392,16 @@ export class StorageService extends EventEmitter {
     // otherwise, create a new entry
     const peers: Record<string, NetworkStats> = {}
     for (const userData of currentUserData) {
-      const multiaddr = createLibp2pAddress(userData.onionAddress, userData.peerId)
       const existingStats = existingPeers[userData.peerId]
+      const existingAddress = existingStats?.address
+      // Keep a known-good dial address (e.g. invite wsPort /tcp/8080/) — do not
+      // rebuild with this node's LOKINET_WS_PORT and clobber the peer store.
+      let multiaddr: string
+      if (existingAddress && existingAddress.includes('/tcp/')) {
+        multiaddr = existingAddress
+      } else {
+        multiaddr = createLibp2pAddress(userData.onionAddress, userData.peerId)
+      }
       if (existingStats) {
         peers[userData.peerId] = existingPeers[userData.peerId]
         peers[userData.peerId].address = multiaddr

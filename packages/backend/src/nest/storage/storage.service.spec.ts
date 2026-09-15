@@ -337,6 +337,44 @@ describe('StorageService', () => {
       expect(arg['peer1'].address).toEqual(expectedMultiaddr)
     })
 
+    it('updatePeerStore should retain existing multiaddr with /tcp/ (invite wsPort)', async () => {
+      await storageService.init()
+      const existingPeerStats = {
+        peer1: {
+          peerId: 'peer1',
+          address: '/dns4/alice.loki/tcp/8080/ws/p2p/peer1',
+          lastSeen: 1,
+          connectionTime: 5,
+        },
+      } as Record<string, NetworkStats>
+      const userId = sigchainService.user.userId
+      jest.spyOn(localDbService, 'getPeerStats').mockResolvedValue(existingPeerStats as any)
+
+      const members = [{ userId }]
+      jest.spyOn(sigchainService, 'getActiveChain').mockReturnValue({
+        team: {
+          members: () => members,
+        },
+      } as any)
+
+      const userProfiles = [
+        {
+          userId,
+          userData: { onionAddress: 'alice.loki', peerId: 'peer1' },
+        },
+      ] as any
+      jest.spyOn(userProfileStore, 'getUserProfiles').mockResolvedValue(userProfiles)
+
+      const setPeerStatsSpy = jest.spyOn(localDbService, 'setPeerStats')
+
+      await storageService.updatePeerStore()
+
+      await waitForExpect(async () => expect(setPeerStatsSpy).toHaveBeenCalledTimes(1), 5_000)
+      const arg = setPeerStatsSpy.mock.calls[0][0]
+      expect(arg['peer1'].address).toEqual('/dns4/alice.loki/tcp/8080/ws/p2p/peer1')
+      expect(arg['peer1'].connectionTime).toEqual(5)
+    })
+
     it('purgeData continues when a data directory is locked', async () => {
       const lockedDir = path.join(storageService.quietDir, 'Ipfs-locked')
       fs.mkdirSync(lockedDir, { recursive: true })

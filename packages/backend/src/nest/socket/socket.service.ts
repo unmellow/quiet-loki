@@ -147,9 +147,12 @@ export class SocketService extends EventEmitter implements OnModuleInit {
       )
 
       // ====== Messages ======
-      socket.on(SocketActions.SEND_MESSAGE, async (payload: SendMessagePayload) => {
-        this.emit(SocketActions.SEND_MESSAGE, payload)
-      })
+      socket.on(
+        SocketActions.SEND_MESSAGE,
+        async (payload: SendMessagePayload, callback?: (response?: { id: string }) => void) => {
+          this.emit(SocketActions.SEND_MESSAGE, payload, callback)
+        }
+      )
 
       socket.on(
         SocketActions.GET_MESSAGES,
