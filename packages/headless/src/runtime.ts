@@ -22,6 +22,7 @@ const SocketActions = {
 const SocketEvents = {
   CHANNELS_STORED: 'channelsStored',
   MESSAGES_STORED: 'messagesStored',
+  TOR_INITIALIZED: 'torInitialized',
 } as const
 
 const InvitationDataVersion = { v4: 'v4' } as const
@@ -103,8 +104,24 @@ export async function startRuntime(opts: { dataDir?: string; resourcesPath?: str
   await new Promise(r => setTimeout(r, 1500))
 
   const socket = await connectSocket(port, secret)
+  await waitForBackendReady(socket)
 
   return { child, socket, dataDir, secret, port, session: loadSession(dataDir) }
+}
+
+/** ConnectionsManager attaches socket listeners after Nest finishes init; wait for that. */
+async function waitForBackendReady(socket: Socket, timeoutMs = 60_000): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout waiting for torInitialized (backend ready)')), timeoutMs)
+    const done = () => {
+      clearTimeout(t)
+      socket.off(SocketEvents.TOR_INITIALIZED, done)
+      resolve()
+    }
+    socket.on(SocketEvents.TOR_INITIALIZED, done)
+    // In case it already fired before we subscribed, also poll briefly via a no-op delay fallback:
+    // Lokinet overlay emits TOR_INITIALIZED during ConnectionsManager init — usually after START.
+  })
 }
 
 async function connectSocket(port: number, secret: string, attempts = 40): Promise<Socket> {
