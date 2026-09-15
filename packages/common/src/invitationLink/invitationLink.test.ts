@@ -5,6 +5,7 @@ import {
   composeInvitationShareUrl,
   parseInvitationLinkDeepUrl,
   p2pAddressesToPairs,
+  pairsToP2pAddresses,
   peerPairsToUrlParamString,
 } from './invitationLink'
 import {
@@ -20,6 +21,7 @@ import {
 import { QUIET_JOIN_PAGE } from '../const'
 import { validInvitationDatav4, validInvitationDatav5 } from '../tests'
 import { createLibp2pAddress } from '../libp2p'
+import { LOKINET_WS_PORT } from '../overlay'
 import { encodeAuthData, encodeQssEndpoint } from './invitationLink.validator'
 import { createLogger } from '../logger'
 
@@ -127,13 +129,32 @@ describe(`Invitation link helper ${InvitationDataVersion.v4}`, () => {
   })
 
   it('converts list of p2p addresses to invitation pairs', () => {
-    const pair: InvitationPair = data.pairs[0]
+    const pair: InvitationPair = { ...data.pairs[0], wsPort: LOKINET_WS_PORT }
     const peerList = [
       createLibp2pAddress(pair.onionAddress, pair.peerId),
       'invalidAddress',
       createLibp2pAddress('somethingElse.loki', 'QmZoiJNAvCffeEHBjk766nLuKVdkxkAT7wfFJDPPLsbKSA'),
     ]
     expect(p2pAddressesToPairs(peerList)).toEqual([pair])
+  })
+
+  it('round-trips invite peer wsPort through pair encode/decode', () => {
+    const pairWithPort: InvitationPair = {
+      ...data.pairs[0],
+      wsPort: 8080,
+    }
+    const encoded = peerPairsToUrlParamString([pairWithPort])
+    expect(encoded).toBe(`${pairWithPort.peerId},${pairWithPort.onionAddress},8080`)
+
+    const url = new URL(DEEP_URL_SCHEME_WITH_SEPARATOR)
+    url.searchParams.append(PEER_ADDRESS_KEY, encoded)
+    url.searchParams.append(PSK_PARAM_KEY, data.psk)
+    url.searchParams.append(AUTH_DATA_KEY, encodeAuthData(data.authData))
+    url.searchParams.append(VERSION_KEY, InvitationDataVersion.v4)
+
+    const parsed = parseInvitationLinkDeepUrl(url.href)
+    expect(parsed.pairs[0]).toEqual(pairWithPort)
+    expect(pairsToP2pAddresses([parsed.pairs[0]])[0]).toContain('/tcp/8080/')
   })
 
   it('retrieves invitation data from deep url', () => {
@@ -436,6 +457,7 @@ describe(`Invitation link helper ${InvitationDataVersion.v5}`, () => {
     const pair: InvitationPair = {
       peerId,
       onionAddress: address,
+      wsPort: LOKINET_WS_PORT,
     }
     const peerList = [
       createLibp2pAddress(pair.onionAddress, pair.peerId),
@@ -443,6 +465,28 @@ describe(`Invitation link helper ${InvitationDataVersion.v5}`, () => {
       createLibp2pAddress('somethingElse.loki', 'QmZoiJNAvCffeEHBjk766nLuKVdkxkAT7wfFJDPPLsbKSA'),
     ]
     expect(p2pAddressesToPairs(peerList)).toEqual([pair])
+  })
+
+  it('round-trips invite peer wsPort through pair encode/decode', () => {
+    const pairWithPort: InvitationPair = {
+      peerId,
+      onionAddress: address,
+      wsPort: 8081,
+    }
+    const encoded = peerPairsToUrlParamString([pairWithPort])
+    expect(encoded).toBe(`${peerId},${address},8081`)
+
+    const url = new URL(DEEP_URL_SCHEME_WITH_SEPARATOR)
+    url.searchParams.append(PEER_ADDRESS_KEY, encoded)
+    url.searchParams.append(PSK_PARAM_KEY, data.psk)
+    url.searchParams.append(AUTH_DATA_KEY, encodeAuthData(data.authData))
+    url.searchParams.append(QSS_ENABLED_KEY, `${data.qssEnabled}`)
+    url.searchParams.append(QSS_ENDPOINT_KEY, encodeQssEndpoint(data.qssEndpoint))
+    url.searchParams.append(VERSION_KEY, InvitationDataVersion.v5)
+
+    const parsed = parseInvitationLinkDeepUrl(url.href)
+    expect(parsed.pairs[0]).toEqual(pairWithPort)
+    expect(pairsToP2pAddresses([parsed.pairs[0]])[0]).toContain('/tcp/8081/')
   })
 
   it('retrieves invitation data from deep url', () => {

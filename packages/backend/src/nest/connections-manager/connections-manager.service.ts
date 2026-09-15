@@ -730,7 +730,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     )
     const bootstrapPeerStats: Record<string, NetworkStats> = {}
     for (const pair of inviteData.pairs) {
-      const multiaddr = createLibp2pAddress(pair.onionAddress, pair.peerId)
+      const multiaddr = createLibp2pAddress(pair.onionAddress, pair.peerId, pair.wsPort)
       bootstrapPeerStats[pair.peerId] = {
         peerId: pair.peerId,
         address: multiaddr,

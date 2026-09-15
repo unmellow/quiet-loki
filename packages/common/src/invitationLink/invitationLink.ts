@@ -153,6 +153,7 @@ export const p2pAddressesToPairs = (addresses: string[]): InvitationPair[] => {
   for (const peerAddress of addresses) {
     let peerId: string
     let onionAddress: string
+    let wsPort: number | undefined
     try {
       peerId = peerAddress.split('/p2p/')[1]
     } catch (e) {
@@ -170,10 +171,18 @@ export const p2pAddressesToPairs = (addresses: string[]): InvitationPair[] => {
       logger.error(`No peerId or address in ${peerAddress}`)
       continue
     }
+    const portMatch = peerAddress.match(/\/tcp\/(\d+)\//)
+    if (portMatch) {
+      wsPort = Number(portMatch[1])
+    }
     const rawAddress = onionAddress.endsWith('.loki') || onionAddress.endsWith('.onion') ? onionAddress.split('.')[0] : onionAddress
     if (!validatePeerData({ peerId, onionAddress: rawAddress })) continue
 
-    pairs.push({ peerId: peerId, onionAddress: rawAddress })
+    const pair: InvitationPair = { peerId: peerId, onionAddress: rawAddress }
+    if (wsPort !== undefined && Number.isFinite(wsPort) && wsPort > 0 && wsPort <= 65535) {
+      pair.wsPort = wsPort
+    }
+    pairs.push(pair)
   }
   return pairs
 }
@@ -188,7 +197,7 @@ export const p2pAddressesToPairs = (addresses: string[]): InvitationPair[] => {
 export const pairsToP2pAddresses = (pairs: InvitationPair[]): string[] => {
   const addresses: string[] = []
   for (const pair of pairs) {
-    addresses.push(createLibp2pAddress(pair.onionAddress, pair.peerId))
+    addresses.push(createLibp2pAddress(pair.onionAddress, pair.peerId, pair.wsPort))
   }
   return addresses
 }
@@ -222,7 +231,11 @@ export const composeInvitationDeepUrl = (data: InvitationData): string => {
 export const peerPairsToUrlParamString = (pairs: InvitationPair[]): string => {
   const commaSeparatedPairs: string[] = []
   for (const pair of pairs) {
-    commaSeparatedPairs.push(`${pair.peerId},${pair.onionAddress}`)
+    if (pair.wsPort !== undefined) {
+      commaSeparatedPairs.push(`${pair.peerId},${pair.onionAddress},${pair.wsPort}`)
+    } else {
+      commaSeparatedPairs.push(`${pair.peerId},${pair.onionAddress}`)
+    }
   }
   return commaSeparatedPairs.join(';')
 }
