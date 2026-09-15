@@ -103,28 +103,18 @@ export async function startRuntime(opts: { dataDir?: string; resourcesPath?: str
   // Give Nest a moment to call listen() after receiving the secret
   await new Promise(r => setTimeout(r, 1500))
 
-  const socket = await connectSocket(port, secret)
-  await waitForBackendReady(socket)
+  // Arm ready waiter BEFORE emitting START so we do not miss torInitialized.
+  const { socket, ready } = await connectSocket(port, secret)
+  await ready
 
   return { child, socket, dataDir, secret, port, session: loadSession(dataDir) }
 }
 
-/** ConnectionsManager attaches socket listeners after Nest finishes init; wait for that. */
-async function waitForBackendReady(socket: Socket, timeoutMs = 60_000): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('timeout waiting for torInitialized (backend ready)')), timeoutMs)
-    const done = () => {
-      clearTimeout(t)
-      socket.off(SocketEvents.TOR_INITIALIZED, done)
-      resolve()
-    }
-    socket.on(SocketEvents.TOR_INITIALIZED, done)
-    // In case it already fired before we subscribed, also poll briefly via a no-op delay fallback:
-    // Lokinet overlay emits TOR_INITIALIZED during ConnectionsManager init — usually after START.
-  })
-}
-
-async function connectSocket(port: number, secret: string, attempts = 40): Promise<Socket> {
+async function connectSocket(
+  port: number,
+  secret: string,
+  attempts = 40
+): Promise<{ socket: Socket; ready: Promise<void> }> {
   let lastErr: unknown
   for (let i = 0; i < attempts; i++) {
     try {
@@ -141,7 +131,6 @@ async function connectSocket(port: number, secret: string, attempts = 40): Promi
         }, 5000)
         s.on('connect', () => {
           clearTimeout(t)
-          s.emit(SocketActions.START)
           resolve(s)
         })
         s.on('connect_error', err => {
@@ -150,7 +139,20 @@ async function connectSocket(port: number, secret: string, attempts = 40): Promi
           reject(err)
         })
       })
-      return socket
+
+      const ready = new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout waiting for torInitialized (backend ready)')), 60_000)
+        const done = () => {
+          clearTimeout(t)
+          socket.off(SocketEvents.TOR_INITIALIZED, done)
+          resolve()
+        }
+        socket.on(SocketEvents.TOR_INITIALIZED, done)
+        // Unblock Nest SocketService.init (waits for START), then CM emits torInitialized.
+        socket.emit(SocketActions.START)
+      })
+
+      return { socket, ready }
     } catch (e) {
       lastErr = e
       await new Promise(r => setTimeout(r, 500))
