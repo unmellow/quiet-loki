@@ -77,3 +77,8 @@ Or pass `--data-dir` on each command.
 4. Uses SocketActions create/join/channel/message
 
 Loki-only: system lokinet, `LOKINET_WS_PORT`, no Tor wrap, no second lokinet, no `:1190`.
+
+## Verified smoke (Arch)
+
+On a machine with system lokinet + `packages/backend-bundle/bundle.cjs`:
+`node lib/cli.js create …` returned `ok: true` with a `#general` channel id, and `invite` printed a `quiet-loki://join#…` URL (psk + 52-char SNApp in `p=`).
