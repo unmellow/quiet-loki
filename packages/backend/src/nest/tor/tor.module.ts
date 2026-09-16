@@ -6,25 +6,24 @@ import { Tor as TorDaemon } from './tor.service'
 import { Tor } from './tor.service.lokinet-shim'
 import { TorControlAuthType, TorPasswordProvider } from './tor.types'
 import { torPasswordProvider } from './tor-password.provider'
-import path from 'path'
 import * as os from 'os'
 import { SocketModule } from '../socket/socket.module'
 import { createLogger } from '../common/logger'
 
-const logger = createLogger('TorModule')
+const logger = createLogger('Lokinet')
 
 const torParamsProvider = {
   provide: TOR_PARAMS_PROVIDER,
-  useFactory: (configOptions: ConfigOptions) => {
-    const torPath = configOptions.torBinaryPath ? path.normalize(configOptions.torBinaryPath) : ''
+  useFactory: (_configOptions: ConfigOptions) => {
+    // Quiet Loki is Loki-only: never resolve or pass a Tor binary path.
+    const torPath = ''
     const options = {
       env: {
-        LD_LIBRARY_PATH: configOptions.torResourcesPath,
         HOME: os.homedir(),
       },
     }
 
-    logger.info('Overlay Params Provider (Lokinet shim):', JSON.stringify({ torPath, options }, null, 2))
+    logger.info('Lokinet overlay params (no Tor binary)', JSON.stringify({ torPath }, null, 2))
 
     return { torPath, options }
   },
@@ -51,6 +50,7 @@ const torControlParams = {
   imports: [SocketModule],
   providers: [
     Tor,
+    // Nest token alias: leftover injectors typed against tor.service still get the Loki overlay.
     { provide: TorDaemon, useExisting: Tor },
     TorControl,
     torControlParams,

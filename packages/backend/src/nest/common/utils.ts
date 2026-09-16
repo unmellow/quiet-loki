@@ -160,21 +160,11 @@ export class DummyIOServer extends Server {
 }
 
 export const torBinForPlatform = (basePath = '', binName = 'tor'): string => {
-  if (process.env.BACKEND === 'mobile') {
-    return basePath
-  }
-  const ext = process.platform === 'win32' ? '.exe' : ''
-  // Wrap path in quotes to handle spaces in path
-  const pathCandidate = path.join(torDirForPlatform(basePath), `${binName}`.concat(ext))
-  logger.info(`Checking for Tor binary at: ${pathCandidate}`)
-  if (fs.existsSync(pathCandidate)) {
-    return pathCandidate
-  }
-  // Quiet Loki is Loki-only: packaged desktop must not require a Tor binary under resources.
-  // TorModule already accepts an empty torBinaryPath; LokinetOverlay does not start TorDaemon.
-  logger.warn(
-    `Tor binary not found at ${pathCandidate}; continuing without Tor (Loki-only).`
-  )
+  // Quiet Loki is Loki-only: never return a Tor binary path (even if 3rd-party/tor exists).
+  // Callers that previously spawned TorDaemon / hashed passwords via tor must no-op.
+  void basePath
+  void binName
+  logger.info('torBinForPlatform: Loki-only — returning empty Tor binary path')
   return ''
 }
 

@@ -1,6 +1,7 @@
 # Quiet-Loki (Lokinet-only)
 
 This fork uses **Lokinet only** for libp2p — it does not wrap Tor for addresses or dials.
+Day 3 cut: the Nest overlay never constructs/starts `TorDaemon` and never resolves a Tor binary path.
 
 | Address | Overlay | How it dials |
 |---|---|---|

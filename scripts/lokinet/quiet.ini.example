@@ -1,12 +1,14 @@
 # Example lokinet.ini for Quiet-Loki desktop.
 # https://github.com/oxen-io/lokinet
+#
+# Quiet Loki uses Lokinet stub DNS (127.3.2.1) only — do not enable HTTP/OxenMQ on :1190.
 
 [router]
 nickname=quiet-peer
 
 [api]
-enabled=true
-bind=127.0.0.1:1190
+enabled=false
+# bind=127.0.0.1:1190
 
 [dns]
 upstream=1.1.1.1

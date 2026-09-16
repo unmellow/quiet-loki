@@ -71,7 +71,7 @@ import { emitError } from '../socket/socket.errors'
 import { SocketService } from '../socket/socket.service'
 import { StorageService } from '../storage/storage.service'
 import { StorageEvents } from '../storage/storage.types'
-import { Tor } from '../tor/tor.service'
+import { Tor } from '../tor/tor.service.lokinet-shim'
 import { ConfigOptions, GetPorts, ServerIoProviderTypes } from '../types'
 import { ServiceState, TorInitState } from './connections-manager.types'
 import { DateTime } from 'luxon'
@@ -145,16 +145,15 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
   }
 
   private async generatePorts() {
-    const controlPort = await getPort()
-    const socksPort = await getPort()
+    // Loki-only: do not allocate Tor SOCKS/control ports. libp2p listens on LOKINET_WS_PORT.
     const libp2pHiddenService = LOKINET_WS_PORT
     const dataServer = await getPort()
     const httpTunnelPort = await getPort()
 
     this.ports = {
-      socksPort,
+      socksPort: 0,
       libp2pHiddenService,
-      controlPort,
+      controlPort: 0,
       dataServer,
       httpTunnelPort,
     }
@@ -355,10 +354,10 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
       }
       if (this.tor) {
         try {
-          this.logger.info('hibernate: killing tor')
+          this.logger.info('hibernate: releasing Lokinet overlay')
           await this.tor.kill()
         } catch (e) {
-          this.logger.error('hibernate: tor.kill failed', e)
+          this.logger.error('hibernate: Lokinet overlay kill failed', e)
         }
       }
       this.hibernating = true
@@ -372,9 +371,8 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
   }
 
   /**
-   * Wake from hibernate. Re-spawns Tor (if killed), re-opens onions, resumes
-   * libp2p + QSS + socket. Safe to call when not hibernated (no-op if tor still
-   * alive and services already resumed).
+   * Wake from hibernate. Re-inits Lokinet overlay if needed, re-opens SNApp
+   * mapping, resumes libp2p + QSS + socket. Safe to call when not hibernated.
    */
   public async wake() {
     if (!this.hibernating && !this.hibernateInFlight) {
@@ -455,10 +453,10 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     }
 
     if (this.tor && !options.saveTor) {
-      this.logger.info('Killing tor')
+      this.logger.info('Releasing Lokinet overlay')
       await this.tor.kill()
     } else if (options.saveTor) {
-      this.logger.info('Saving tor')
+      this.logger.info('Keeping Lokinet overlay')
     }
     if (this.storageService && options.closeDatastore) {
       this.logger.info('Stopping StorageService')
@@ -506,7 +504,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     this.logger.info('Purging data')
     this.storageService.purgeData()
 
-    this.logger.info('Resetting Tor')
+    this.logger.info('Resetting Lokinet overlay')
     this.tor.resetHiddenServices()
 
     this.logger.info('Resetting state')

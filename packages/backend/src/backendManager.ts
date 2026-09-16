@@ -4,8 +4,7 @@ import path from 'path'
 import getPort from 'get-port'
 import { AppModule } from './nest/app.module'
 import { ConnectionsManagerService } from './nest/connections-manager/connections-manager.service'
-import { Tor } from './nest/tor/tor.service'
-import { torBinForPlatform, torDirForPlatform } from './nest/common/utils'
+import { Tor } from './nest/tor/tor.service.lokinet-shim'
 import initRnBridge, { RnBridge } from './rn-bridge'
 import { INestApplicationContext } from '@nestjs/common'
 import { OpenServices, validateOptions } from './options'
@@ -193,10 +192,7 @@ function setupGracefulShutdown(app: INestApplicationContext, getConnectionsManag
 export const runBackendDesktop = async (secret: string) => {
   logger.info('Running backend manager desktop')
 
-  const isDev = process.env.NODE_ENV === 'development'
-
   validateOptions(options)
-  const resourcesPath = options.resourcesPath.trim()
   if (!secret) {
     logger.error('Socket IO secret is not set. Please set SOCKET_IO_SECRET via IPC.')
     throw new Error('Socket IO secret is not set.')
@@ -205,8 +201,9 @@ export const runBackendDesktop = async (secret: string) => {
     AppModule.forOptions({
       socketIOPort: options.socketIOPort,
       socketIOSecret: secret,
-      torBinaryPath: torBinForPlatform(resourcesPath),
-      torResourcesPath: torDirForPlatform(resourcesPath),
+      // Loki-only: do not resolve or pass a Tor binary / resources path.
+      torBinaryPath: '',
+      torResourcesPath: '',
       torControlPort: await getPort(),
       options: {
         env: {
@@ -257,7 +254,8 @@ export const runBackendMobile = async (rn_bridge: any, secret: string) => {
       httpTunnelPort,
       torAuthCookie: options.authCookie ? options.authCookie : null,
       torControlPort,
-      torBinaryPath: options.torBinary ? options.torBinary : null,
+      // Loki-only: ignore any mobile Tor binary path.
+      torBinaryPath: '',
       options: {
         env: {
           appDataPath: options.dataPath,
