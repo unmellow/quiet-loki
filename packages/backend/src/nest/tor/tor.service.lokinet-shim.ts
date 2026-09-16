@@ -8,30 +8,27 @@ import {
   TOR_PASSWORD_PROVIDER,
 } from '../const'
 import { ConfigOptions, ServerIoProviderTypes } from '../types'
-import { Tor as TorDaemon } from './tor.service'
 import { TorControl } from './tor-control.service'
 import { TorParamsProvider, TorPasswordProvider } from './tor.types'
 import { LokinetService } from '../lokinet/lokinet.service'
 import { createLogger } from '../common/logger'
 import { LOKINET_WS_PORT } from '@quiet/common'
 
-const logger = createLogger('LokinetOverlay')
+const logger = createLogger('Lokinet')
 
 function stripTld(address: string): string {
   return address.replace(/\.loki$/i, '').replace(/\.onion$/i, '')
 }
 
 /**
- * Loki-only overlay shim.
- * Does not wrap Tor for addresses: SNApp identity comes from system Lokinet DNS.
- * Tor daemon is not started; leftover Tor APIs no-op or throw clearly.
+ * Loki-only overlay.
+ * SNApp identity comes from system Lokinet DNS. Never constructs or starts TorDaemon;
+ * leftover Tor API names no-op or throw clearly for Nest DI compatibility.
  */
 @Injectable()
 export class Tor extends EventEmitter implements OnModuleInit {
   socksPort = 0
   bootstrapped = false
-  /** Retained for Nest token compatibility; never initialized for Day 1 Loki-only. */
-  private readonly tor: TorDaemon | null = null
   private readonly lokinet: LokinetService
   private lokiAddress: string | undefined
   [key: string]: any
@@ -45,9 +42,7 @@ export class Tor extends EventEmitter implements OnModuleInit {
     _torControl: TorControl
   ) {
     super()
-    // Do not construct/start TorDaemon — Quiet Loki must not wrap Tor.
     void _torControl
-    void this.tor
     this.lokinet = new LokinetService({ quietDir })
   }
 
