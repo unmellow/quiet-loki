@@ -614,6 +614,9 @@ app.on('ready', async () => {
       HCAPTCHA_FORWARD_ENDPOINT: process.env.HCAPTCHA_FORWARD_ENDPOINT,
       IS_E2E: process.env.IS_E2E ?? 'false',
       NETWORK_LOGGING: process.env.NETWORK_LOGGING ?? 'false',
+      LOKINET_WS_PORT: process.env.LOKINET_WS_PORT ?? '8080',
+      LOKINET_DNS: process.env.LOKINET_DNS,
+      LOKINET_LISTEN_HOST: process.env.LOKINET_LISTEN_HOST,
     },
   })
   logger.info('Forked backend, PID:', backendProcess.pid)
