@@ -52,4 +52,4 @@ export function isValidSnappAddress(address: string): boolean {
 
 export const LOKINET_DNS = process.env.LOKINET_DNS || '127.3.2.1'
 export const LOKINET_LISTEN_HOST = process.env.LOKINET_LISTEN_HOST || '172.16.0.1'
-export const LOKINET_WS_PORT = Number(process.env.LOKINET_WS_PORT || 80)
+export const LOKINET_WS_PORT = Number(process.env.LOKINET_WS_PORT || 8080)

@@ -13,7 +13,7 @@ Invite links and libp2p multiaddrs:
 quiet-loki://join#…  (p= must be a 52-char SNApp, never empty, never a 56-char onion)
 ```
 
-Default listen port is **80** on `172.16.0.1` (`LOKINET_LISTEN_HOST` / `LOKINET_WS_PORT`). Binding port 80 needs `CAP_NET_BIND_SERVICE` or root; for unprivileged Day 2 testing set the same high port on both peers, e.g. `export LOKINET_WS_PORT=8080`.
+Default listen port is **8080** on `172.16.0.1` (`LOKINET_LISTEN_HOST` / `LOKINET_WS_PORT`). Override with `export LOKINET_WS_PORT=80` only when you have `CAP_NET_BIND_SERVICE` or root; keep the same port on both peers.
 
 On startup the backend looks up the SNApp with `host localhost.loki 127.3.2.1`.
 

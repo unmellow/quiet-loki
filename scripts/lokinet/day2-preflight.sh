@@ -4,7 +4,7 @@ set -euo pipefail
 
 DNS="${LOKINET_DNS:-127.3.2.1}"
 HOST_BIND="${LOKINET_LISTEN_HOST:-172.16.0.1}"
-PORT="${LOKINET_WS_PORT:-80}"
+PORT="${LOKINET_WS_PORT:-8080}"
 
 echo "== Day 2 preflight =="
 echo "DNS=$DNS listen=$HOST_BIND:$PORT"
