@@ -845,9 +845,11 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     } catch (e) {
       this.logger.error(`Failed to launch community ${community.id}`, e)
       this.communityState = ServiceState.DEFAULT
+      // Surface the actionable libp2p WebSocket bind error (EADDRINUSE / EACCES) instead of the generic message.
+      const isWsBindError = e instanceof Error && e.message.startsWith('Cannot bind libp2p WebSocket')
       emitError(this.serverIoProvider.io, {
         type: SocketActions.LAUNCH_COMMUNITY,
-        message: ErrorMessages.COMMUNITY_LAUNCH_FAILED,
+        message: isWsBindError ? e.message : ErrorMessages.COMMUNITY_LAUNCH_FAILED,
         community: community.id,
         trace: e.stack,
       })
