@@ -3,7 +3,6 @@ import { styled } from '@mui/material/styles'
 import Modal from '../ui/Modal/Modal'
 import JoinCommunityImg from '../../static/images/join-community.png'
 import { Grid, Typography } from '@mui/material'
-import { Site } from '@quiet/common'
 import { ConnectionProcessInfo } from '@quiet/types'
 import classNames from 'classnames'
 import { createLogger } from '../../logger'
@@ -111,7 +110,6 @@ export interface JoiningPanelComponentProps {
 const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
   open,
   handleClose,
-  openUrl,
   connectionInfo,
   isOwner,
 }) => {
@@ -156,17 +154,9 @@ const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
               </strong>
               <br />
               <br />
-              Quiet stores data on <i>your</i> community’s devices using the battle-tested privacy tool Tor to protect
-              your information. Tor is fast once connected, but it can be slow at first, and closing this window will
-              stop the process of joining.
+              Quiet Loki stores data on <i>your</i> community’s devices and connects them over Lokinet to protect your
+              information. Connecting can be slow at first, and closing this window will stop the process of joining.
             </Typography>
-          )}
-          {!isOwner && (
-            <a onClick={() => openUrl(Site.MAIN_PAGE)}>
-              <Typography className={classes.link} variant='body2'>
-                Learn more about Tor and Quiet
-              </Typography>
-            </a>
           )}
         </Grid>
       </StyledGrid>

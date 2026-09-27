@@ -588,7 +588,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
       this.storageService.purgeData({ removeTorDataDirectory: false })
     }
 
-    this.logger.info('Resetting Tor hidden services')
+    this.logger.info('Resetting Lokinet hidden service state')
     this.tor.resetHiddenServices()
 
     this.logger.info('Resetting community state')
