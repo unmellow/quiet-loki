@@ -1,7 +1,13 @@
 jest.mock('electron-context-menu', () => jest.fn()) // prevents context-menu from interfering with tests
+// Don't install a real SIGTERM handler in the jest worker; assert on the call instead.
+jest.mock('./shutdownWatchdog', () => ({
+  ...jest.requireActual('./shutdownWatchdog'),
+  installQuitOnSigterm: jest.fn(),
+}))
 
 import * as main from './main'
 import * as backendHelpers from './backendHelpers'
+import { BACKEND_EXIT_TIMEOUT_MS, STATE_SAVED_TIMEOUT_MS, installQuitOnSigterm } from './shutdownWatchdog'
 
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow, app, ipcMain, Menu } from 'electron'
@@ -59,6 +65,7 @@ jest.mock('child_process', () => {
         on: jest.fn(),
         once: jest.fn(),
         send: jest.fn(),
+        kill: jest.fn().mockReturnValue(true),
       }
     }),
   }
@@ -270,6 +277,52 @@ describe('additional quit flow scenarios', () => {
     }
   })
 
+  it('SIGTERM goes through the normal app.quit() path', () => {
+    expect(installQuitOnSigterm).toHaveBeenCalledWith(process, expect.any(Function), expect.any(Function))
+    const quit = (installQuitOnSigterm as jest.Mock).mock.calls[0][1]
+    ;(app.quit as jest.Mock).mockClear()
+    quit()
+    expect(app.quit).toHaveBeenCalledTimes(1)
+  })
+
+  it('before-quit kills the backend if it has not exited within the timeout', () => {
+    jest.useFakeTimers()
+    try {
+      main.quitWatchdogs.backendExit.cancel() // armed with real timers by the earlier close tests
+      const beforeQuitHandler = mockAppOnCalls.find(c => c[0] === 'before-quit')[1]
+      const backend = forkMock.mock.results[0].value
+      backend.kill.mockClear()
+
+      beforeQuitHandler({ preventDefault: jest.fn() })
+      expect(main.quitWatchdogs.backendExit.armed).toBe(true)
+      jest.advanceTimersByTime(BACKEND_EXIT_TIMEOUT_MS - 1)
+      expect(backend.kill).not.toHaveBeenCalled()
+      jest.advanceTimersByTime(1)
+      expect(backend.kill).toHaveBeenCalledWith('SIGKILL')
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('quits if the renderer never confirms state-saved', () => {
+    jest.useFakeTimers()
+    try {
+      const backend = forkMock.mock.results[0].value
+      const closeCb = backend.on.mock.calls.find((c: any[]) => c[0] === 'close')[1]
+      ;(app.exit as jest.Mock).mockClear()
+
+      closeCb() // backend exited ⇒ force-save-state, renderer never answers
+      expect(main.quitWatchdogs.backendExit.armed).toBe(false)
+      expect(main.quitWatchdogs.stateSaved.armed).toBe(true)
+      jest.advanceTimersByTime(STATE_SAVED_TIMEOUT_MS - 1)
+      expect(app.exit).not.toHaveBeenCalled()
+      jest.advanceTimersByTime(1)
+      expect(app.exit).toHaveBeenCalledWith(0)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('backend close ⇒ force-save-state ⇒ state-saved ⇒ app.quit()', () => {
     const backend = forkMock.mock.results[0].value
     const closeCb = backend.on.mock.calls.find((c: any[]) => c[0] === 'close')[1]
@@ -283,6 +336,7 @@ describe('additional quit flow scenarios', () => {
     stateSavedHandler() // renderer confirms saved
 
     expect(app.quit).toHaveBeenCalled()
+    expect(main.quitWatchdogs.stateSaved.armed).toBe(false)
   })
 })
 

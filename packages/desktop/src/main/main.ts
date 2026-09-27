@@ -12,6 +12,13 @@ import { fork, ChildProcess } from 'child_process'
 import { DEEP_URL_SCHEME, getFilesData } from '@quiet/common'
 import { type BackendLeaveCommunityMessage } from '@quiet/types'
 import { updateDesktopFile, processInvitationCode } from './invitation'
+import {
+  BACKEND_EXIT_TIMEOUT_MS,
+  STATE_SAVED_TIMEOUT_MS,
+  createWatchdog,
+  installQuitOnSigterm,
+  killIfStillRunning,
+} from './shutdownWatchdog'
 const ElectronStore = require('electron-store')
 const contextMenu = require('electron-context-menu')
 import sodium from 'libsodium-wrappers-sumo'
@@ -156,6 +163,8 @@ export const applyDevTools = async () => {
 const requestStateSaveOrQuit = () => {
   if (rendererReady && isBrowserWindow(mainWindow) && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send('force-save-state')
+    // Don't wait forever for a renderer that can't answer (e.g. it is dying with the display).
+    quitWatchdogs.stateSaved.arm()
     return
   }
 
@@ -517,6 +526,29 @@ const setupUpdater = async () => {
 let ports: ApplicationPorts
 let backendProcess: ChildProcess | null = null
 
+/** Bounded waits for the quit path (see shutdownWatchdog.ts). Exported for tests. */
+export const quitWatchdogs = {
+  backendExit: createWatchdog(BACKEND_EXIT_TIMEOUT_MS, () => {
+    logger.warn(`Backend did not exit within ${BACKEND_EXIT_TIMEOUT_MS} ms of 'close', killing it`)
+    if (!killIfStillRunning(backendProcess)) {
+      logger.warn('Backend could not be killed (already gone?), exiting app')
+      app.exit(0)
+    }
+    // After the kill the backend 'close' event runs the normal state-save / quit path.
+  }),
+  stateSaved: createWatchdog(STATE_SAVED_TIMEOUT_MS, () => {
+    logger.warn(`Renderer did not confirm state-saved within ${STATE_SAVED_TIMEOUT_MS} ms, quitting`)
+    app.exit(0)
+  }),
+}
+
+/** Ask the backend to close and bound how long we wait for it to exit. */
+const closeBackend = () => {
+  if (!backendProcess) return
+  backendProcess.send('close')
+  quitWatchdogs.backendExit.arm()
+}
+
 app.on('ready', async () => {
   logger.info('Event: app.ready')
   await sodium.ready
@@ -702,6 +734,7 @@ app.on('ready', async () => {
 
   backendProcess.on('close', (code, signal) => {
     logger.warn('Backend process close event', code, signal)
+    quitWatchdogs.backendExit.cancel()
     backendProcess = null
     if (updating) return
     requestStateSaveOrQuit()
@@ -738,7 +771,7 @@ app.on('ready', async () => {
       if (!updating) {
         e.preventDefault()
       }
-      backendProcess.send('close')
+      closeBackend()
       return
     }
     logger.info('Main window close event, saving state')
@@ -757,7 +790,7 @@ app.on('ready', async () => {
         e.preventDefault()
       }
       logger.trace('Closing splash window')
-      backendProcess?.send('close')
+      closeBackend()
       return
     }
     logger.trace('Splash window close event, saving state')
@@ -766,6 +799,7 @@ app.on('ready', async () => {
 
   ipcMain.on('state-saved', () => {
     logger.info('ipcMain: state-saved')
+    quitWatchdogs.stateSaved.cancel()
     if (updating) return
 
     if (backendProcess === null) {
@@ -860,7 +894,7 @@ app.on('ready', async () => {
   ipcMain.on('restart-app', () => {
     logger.info('ipcMain: restart-app')
     app.relaunch()
-    backendProcess?.send('close')
+    closeBackend()
   })
 
   ipcMain.on('writeTempFile', (event, arg) => {
@@ -980,10 +1014,15 @@ app.on('before-quit', e => {
     if (!updating) {
       e.preventDefault()
     }
-    if (backendProcess) {
-      backendProcess.send('close')
-    }
+    closeBackend()
     return
   }
   logger.info('App before-quit backend exited, quitting app', e)
 })
+
+// systemd / `kill` send SIGTERM: go through the normal quit path (before-quit → backend 'close' → state save).
+installQuitOnSigterm(
+  process,
+  () => app.quit(),
+  message => logger.info(message)
+)
