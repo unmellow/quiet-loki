@@ -214,7 +214,6 @@ export class WebSocketListener extends TypedEventEmitter<ListenerEvents> impleme
     // Bind explicitly on lokitun0 (172.16.0.1) for Lokinet; it-ws typings omit host.
     this.http!.listen(this.init.targetPort, bindHost)
 
-
     await new Promise<void>((resolve, reject) => {
       const onListening = (): void => {
         _log(`Listening!`)

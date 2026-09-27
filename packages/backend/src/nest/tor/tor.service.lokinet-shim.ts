@@ -1,12 +1,6 @@
 import { EventEmitter } from 'events'
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common'
-import {
-  CONFIG_OPTIONS,
-  QUIET_DIR,
-  SERVER_IO_PROVIDER,
-  TOR_PARAMS_PROVIDER,
-  TOR_PASSWORD_PROVIDER,
-} from '../const'
+import { CONFIG_OPTIONS, QUIET_DIR, SERVER_IO_PROVIDER, TOR_PARAMS_PROVIDER, TOR_PASSWORD_PROVIDER } from '../const'
 import { ConfigOptions, ServerIoProviderTypes } from '../types'
 import { TorControl } from './tor-control.service'
 import { TorParamsProvider, TorPasswordProvider } from './tor.types'
@@ -30,7 +24,7 @@ export class Tor extends EventEmitter implements OnModuleInit {
   socksPort = 0
   bootstrapped = false
   private readonly lokinet: LokinetService
-  private lokiAddress: string | undefined
+  private lokiAddress: string | undefined;
   [key: string]: any
 
   constructor(
