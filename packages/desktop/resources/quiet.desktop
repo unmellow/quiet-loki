@@ -4,6 +4,6 @@ Comment=Quiet Desktop
 GenericName=Quiet Client for Linux
 Type=Application
 StartupNotify=true
-MimeType=x-scheme-handler/quiet
+MimeType=x-scheme-handler/quiet-loki
 SingleMainWindow=true
 Categories=Network;Chat;

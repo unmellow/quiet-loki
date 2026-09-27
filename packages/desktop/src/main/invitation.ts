@@ -3,6 +3,7 @@ import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
 import { BrowserWindow } from 'electron'
+import { DEEP_URL_SCHEME } from '@quiet/common'
 import { createLogger } from './logger'
 
 const logger = createLogger('invitation')
@@ -14,13 +15,25 @@ export const processInvitationCode = (mainWindow: BrowserWindow, code: string | 
   })
 }
 
+/** Name the AppImage installs its .desktop entry under (matches the distro package's quiet-loki.desktop). */
+export const DESKTOP_FILE_NAME = 'quiet-loki.desktop'
+/** Template shipped next to the AppImage resources (electron-builder linux.extraFiles). */
+const DESKTOP_FILE_RESOURCE = 'quiet.desktop'
+
 export const updateDesktopFile = (isDev: boolean) => {
   if (isDev || process.platform !== 'linux') return
+  // AppImage-only: distro packages (system electron + app.asar) ship their own .desktop entry and scheme
+  // registration. Outside an AppImage, APPIMAGE is unset (Exec would become `undefined %U`) and
+  // process.resourcesPath points at the system electron, not at our resources.
+  if (!process.env.APPIMAGE) {
+    logger.info('Not running from an AppImage, skipping .desktop file and scheme handler update')
+    return
+  }
   logger.info(`Updating desktop file and setting default scheme handler`)
 
-  const desktopName = 'quiet.desktop'
+  const desktopName = DESKTOP_FILE_NAME
   const appDesktopFile = path.join(os.homedir(), `.local/share/applications/${desktopName}`)
-  const resource = path.join(process.resourcesPath, desktopName)
+  const resource = path.join(process.resourcesPath, DESKTOP_FILE_RESOURCE)
 
   try {
     if (!fs.existsSync(appDesktopFile)) {
@@ -37,7 +50,7 @@ export const updateDesktopFile = (isDev: boolean) => {
   }
 
   try {
-    const scheme = 'x-scheme-handler/quiet'
+    const scheme = `x-scheme-handler/${DEEP_URL_SCHEME}`
     logger.info(execSync(`xdg-mime default ${desktopName} ${scheme}`).toString())
     logger.info(execSync(`xdg-mime query default ${scheme}`).toString())
   } catch (e) {
@@ -45,7 +58,7 @@ export const updateDesktopFile = (isDev: boolean) => {
   }
 
   try {
-    logger.info(execSync('xdg-settings set default-url-scheme-handler quiet quiet.desktop').toString())
+    logger.info(execSync(`xdg-settings set default-url-scheme-handler ${DEEP_URL_SCHEME} ${desktopName}`).toString())
   } catch (e) {
     logger.error("Couldn't update default scheme handler via xdg-settings", e)
   }
