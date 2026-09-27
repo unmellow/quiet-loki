@@ -9,7 +9,7 @@ import { getPorts, ApplicationPorts, closeHangingBackendProcess } from './backen
 import { setEngine, CryptoEngine } from 'pkijs'
 import { createLogger } from './logger'
 import { fork, ChildProcess } from 'child_process'
-import { getFilesData } from '@quiet/common'
+import { DEEP_URL_SCHEME, getFilesData } from '@quiet/common'
 import { type BackendLeaveCommunityMessage } from '@quiet/types'
 import { updateDesktopFile, processInvitationCode } from './invitation'
 const ElectronStore = require('electron-store')
@@ -81,7 +81,7 @@ if (!gotTheLock) {
   })
 }
 
-logger.info('setAsDefaultProtocolClient', app.setAsDefaultProtocolClient('quiet'))
+logger.info('setAsDefaultProtocolClient', app.setAsDefaultProtocolClient(DEEP_URL_SCHEME))
 
 interface IWindowSize {
   width: number

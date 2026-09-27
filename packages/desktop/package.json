@@ -14,7 +14,7 @@
     "protocols": {
       "name": "electron-deep-linking",
       "schemes": [
-        "quiet"
+        "quiet-loki"
       ]
     },
     "mac": {

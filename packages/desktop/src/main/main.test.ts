@@ -138,6 +138,13 @@ const autoUpdaterOn = autoUpdater.on as jest.Mock<any, any>
 const mockAppOnCalls = appOn.mock.calls
 const mockIpcMainOn = ipcMain.on as jest.Mock<any, any>
 
+describe('deep link scheme', () => {
+  it('registers only the quiet-loki URL scheme', () => {
+    expect(app.setAsDefaultProtocolClient).toHaveBeenCalledWith('quiet-loki')
+    expect(app.setAsDefaultProtocolClient).not.toHaveBeenCalledWith('quiet')
+  })
+})
+
 describe('electron app ready event', () => {
   it('application will trigger ready event, next run listener function of ready event', async () => {
     expect(mockAppOnCalls[2][0]).toBe('ready')
