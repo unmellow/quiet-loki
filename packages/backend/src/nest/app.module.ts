@@ -228,17 +228,20 @@ export class AppModule {
             }),
           inject: [DB_PATH],
         },
+        // Quiet Loki is Lokinet-only: the clearnet QSS/QPS services are hard-disabled regardless of env.
+        // QSSClient refuses to open a socket while QSS_ALLOWED is false, so nothing can reach a QSS
+        // server, even for communities or invites that carry a qssEndpoint.
         {
           provide: QSS_ALLOWED,
-          useValue: process.env.QSS_ALLOWED === 'true',
+          useValue: false,
         },
         {
           provide: QSS_ENDPOINT,
-          useValue: process.env.QSS_ENDPOINT,
+          useValue: undefined,
         },
         {
           provide: QPS_ALLOWED,
-          useValue: process.env.QPS_ALLOWED === 'true',
+          useValue: false,
         },
       ],
       exports: [

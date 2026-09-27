@@ -607,9 +607,9 @@ app.on('ready', async () => {
       COLORIZE: process.env.COLORIZE ?? 'true',
       LOG_TO_FILE: process.env.LOG_TO_FILE ?? 'true',
       STATIC_LOG_ID: process.env.STATIC_LOG_ID,
-      QSS_ALLOWED: process.env.QSS_ALLOWED ?? 'false',
-      QSS_ENDPOINT: process.env.QSS_ENDPOINT,
-      QPS_ALLOWED: process.env.QPS_ALLOWED ?? 'false',
+      // Lokinet-only: never enable the clearnet QSS/QPS services or pass a QSS endpoint to the backend.
+      QSS_ALLOWED: 'false',
+      QPS_ALLOWED: 'false',
       HCAPTCHA_TEMPLATE_PATH: path.join(__dirname, 'captcha.html'),
       HCAPTCHA_FORWARD_ENDPOINT: process.env.HCAPTCHA_FORWARD_ENDPOINT,
       IS_E2E: process.env.IS_E2E ?? 'false',
