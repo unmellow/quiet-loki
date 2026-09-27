@@ -74,6 +74,7 @@ import { StorageEvents } from '../storage/storage.types'
 import { Tor } from '../tor/tor.service.lokinet-shim'
 import { ConfigOptions, GetPorts, ServerIoProviderTypes } from '../types'
 import { ServiceState, TorInitState } from './connections-manager.types'
+import { normalizeSelfAddress, reconcileSelfAddress, replaceSelfAddressInMultiaddr } from './self-address'
 import { DateTime } from 'luxon'
 import { createLogger } from '../common/logger'
 import { peerIdFromString } from '@libp2p/peer-id'
@@ -870,16 +871,86 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     } as LaunchCommunityPayload)
   }
 
+  /**
+   * Registers our hidden service with the overlay and returns the address to listen on / announce.
+   *
+   * Lokinet generates a new SNApp key on every restart unless `[network] keyfile=` is set, so the address stored in
+   * the identity can be stale. The overlay's current address wins: on a mismatch the stored identity, our own entry in
+   * the community peer list and our own peer stats are updated. If the overlay can't be asked, the stored address is
+   * kept (previous behaviour).
+   */
   public async spawnTorHiddenService(communityId: string, identity: Identity): Promise<string> {
     this.logger.info(`Registering hidden service for community ${communityId}, peer: ${identity.networkInfo.peerId.id}`)
     this.serverIoProvider.io.emit(SocketEvents.CONNECTION_PROCESS_INFO, ConnectionProcessInfo.SPAWNING_HIDDEN_SERVICE)
-    this.tor.registerHiddenService({
-      targetPort: this.ports.libp2pHiddenService,
-      privKey: identity.networkInfo.hiddenService.privateKey,
-      onionAddress: identity.networkInfo.hiddenService.onionAddress,
-      virtPort: 80,
-    })
-    return identity.networkInfo.hiddenService.onionAddress
+    const storedAddress = identity.networkInfo.hiddenService.onionAddress
+    const result = await reconcileSelfAddress(
+      () =>
+        this.tor.registerHiddenService({
+          targetPort: this.ports.libp2pHiddenService,
+          privKey: identity.networkInfo.hiddenService.privateKey,
+          onionAddress: storedAddress,
+          virtPort: 80,
+        }),
+      storedAddress
+    )
+
+    switch (result.status) {
+      case 'unavailable':
+        this.logger.warn(
+          `Could not get the current Lokinet SNApp address; keeping the stored address ${normalizeSelfAddress(storedAddress)}.loki`,
+          result.error
+        )
+        break
+      case 'changed':
+        this.logger.warn(
+          `Lokinet SNApp address changed from ${normalizeSelfAddress(storedAddress)}.loki to ${result.address}.loki; ` +
+            `invites for the old address will no longer work`
+        )
+        await this.persistSelfAddressChange(communityId, identity, storedAddress, result.address)
+        break
+      case 'unchanged':
+        break
+    }
+    return result.address
+  }
+
+  /** Replace our stale overlay address in the stored identity, the community peer list and our own peer stats. */
+  private async persistSelfAddressChange(
+    communityId: string,
+    identity: Identity,
+    oldAddress: string,
+    newAddress: string
+  ): Promise<void> {
+    const ownPeerId = identity.networkInfo.peerId.id
+    const updatedIdentity: Identity = {
+      ...identity,
+      networkInfo: {
+        ...identity.networkInfo,
+        hiddenService: { ...identity.networkInfo.hiddenService, onionAddress: newAddress },
+      },
+    }
+    await this.storageService.setIdentity(updatedIdentity)
+
+    const community = await this.localDbService.getCommunity(communityId)
+    const storedPeerList = community?.peerList ?? []
+    if (community && storedPeerList.length > 0) {
+      const peerList = [
+        ...new Set(
+          storedPeerList.map(address => replaceSelfAddressInMultiaddr(address, ownPeerId, oldAddress, newAddress))
+        ),
+      ]
+      if (peerList.join('\n') !== storedPeerList.join('\n')) {
+        await this.localDbService.setCommunity({ ...community, peerList })
+      }
+    }
+
+    const ownStats = await this.localDbService.getPeerStats(ownPeerId)
+    if (ownStats?.address) {
+      const address = replaceSelfAddressInMultiaddr(ownStats.address, ownPeerId, oldAddress, newAddress)
+      if (address !== ownStats.address) {
+        await this.localDbService.updatePeerStats({ [ownPeerId]: { ...ownStats, address } })
+      }
+    }
   }
 
   public async launch(community: Community) {

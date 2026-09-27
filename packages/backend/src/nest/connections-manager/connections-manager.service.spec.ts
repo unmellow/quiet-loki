@@ -229,28 +229,110 @@ describe('ConnectionsManagerService', () => {
     }
   )
 
-  it('registers the stored onion address without contacting Tor', async () => {
-    connectionsManagerService['ports'] = {
-      socksPort: 9001,
-      libp2pHiddenService: 9002,
-      controlPort: 9003,
-      dataServer: 9004,
-      httpTunnelPort: 9005,
-    }
-    const tor = connectionsManagerService['tor']
-    const registerHiddenService = jest.spyOn(tor, 'registerHiddenService').mockResolvedValue('')
-    const spawnHiddenService = jest.spyOn(tor, 'spawnHiddenService')
+  describe('spawnTorHiddenService / Lokinet SNApp address reconcile', () => {
+    const NEW_SNAPP = 'odgz5hjgorj3kbhjdpi3u9xdmjzdxxp4qqpfjtzuxzcukdasnrcy'
+    let tor: any
+    let warnSpy: jest.SpiedFunction<any>
 
-    const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
-
-    expect(onionAddress).toBe(userIdentity.networkInfo.hiddenService.onionAddress)
-    expect(registerHiddenService).toHaveBeenCalledWith({
-      targetPort: 9002,
-      privKey: userIdentity.networkInfo.hiddenService.privateKey,
-      onionAddress: userIdentity.networkInfo.hiddenService.onionAddress,
-      virtPort: 80,
+    beforeEach(() => {
+      connectionsManagerService['ports'] = {
+        socksPort: 9001,
+        libp2pHiddenService: 9002,
+        controlPort: 9003,
+        dataServer: 9004,
+        httpTunnelPort: 9005,
+      }
+      tor = connectionsManagerService['tor']
+      warnSpy = jest.spyOn(connectionsManagerService['logger'], 'warn')
     })
-    expect(spawnHiddenService).not.toHaveBeenCalled()
+
+    it('keeps the stored address when the overlay reports the same one', async () => {
+      const stored = userIdentity.networkInfo.hiddenService.onionAddress
+      const registerHiddenService = jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(stored)
+      const spawnHiddenService = jest.spyOn(tor, 'spawnHiddenService')
+      const setIdentity = jest.spyOn(storageService, 'setIdentity')
+
+      const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
+
+      expect(onionAddress).toBe(stored)
+      expect(registerHiddenService).toHaveBeenCalledWith({
+        targetPort: 9002,
+        privKey: userIdentity.networkInfo.hiddenService.privateKey,
+        onionAddress: stored,
+        virtPort: 80,
+      })
+      expect(spawnHiddenService).not.toHaveBeenCalled()
+      expect(setIdentity).not.toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Lokinet SNApp address changed'))
+    })
+
+    it('keeps the stored address when the overlay cannot be asked', async () => {
+      const stored = userIdentity.networkInfo.hiddenService.onionAddress
+      jest.spyOn(tor, 'registerHiddenService').mockRejectedValue(new Error('lokinet down'))
+      const setIdentity = jest.spyOn(storageService, 'setIdentity')
+
+      const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
+
+      expect(onionAddress).toBe(stored)
+      expect(setIdentity).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Could not get the current Lokinet SNApp address'),
+        expect.any(Error)
+      )
+    })
+
+    it('adopts a changed SNApp address, warns, and updates the identity, peer list and own peer stats', async () => {
+      // Lokinet identities store the bare SNApp address (no TLD).
+      const stored = 'hrqqi1561hus3n8djnhnd4u3wxquwhtryxii4sskm595df7fdouy'
+      userIdentity = {
+        ...userIdentity,
+        networkInfo: {
+          ...userIdentity.networkInfo,
+          hiddenService: { ...userIdentity.networkInfo.hiddenService, onionAddress: stored },
+        },
+      }
+      const ownPeerId = userIdentity.networkInfo.peerId.id
+      const otherPeer = createLibp2pAddress(
+        'y7yczmugl2tekami7sbdz5pfaemvx7bahwthrdvcbzw5vex2crsr26qd',
+        '12D3KooWKCWstmqi5gaQvipT7xVneVGfWV7HYpCbmUu626R92hXx'
+      )
+      const oldSelf = createLibp2pAddress(stored, ownPeerId)
+      await storageService.setIdentity(userIdentity)
+      await localDbService.setCommunity({ ...community, peerList: [oldSelf, otherPeer] })
+      await localDbService.updatePeerStats({
+        [ownPeerId]: { peerId: ownPeerId, address: oldSelf, lastSeen: 1, connectionTime: 0 },
+      })
+      jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(`${NEW_SNAPP}.loki`)
+
+      const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
+
+      expect(onionAddress).toBe(NEW_SNAPP)
+      expect(warnSpy).toHaveBeenCalledWith(
+        `Lokinet SNApp address changed from ${stored}.loki to ${NEW_SNAPP}.loki; invites for the old address will no longer work`
+      )
+      const identity = await storageService.getIdentity(community.id)
+      expect(identity?.networkInfo.hiddenService.onionAddress).toBe(NEW_SNAPP)
+      expect(identity?.networkInfo.peerId).toEqual(userIdentity.networkInfo.peerId)
+      const newSelf = createLibp2pAddress(NEW_SNAPP, ownPeerId)
+      expect((await localDbService.getCommunity(community.id))?.peerList).toEqual([newSelf, otherPeer])
+      expect((await localDbService.getPeerStats(ownPeerId))?.address).toBe(newSelf)
+    })
+
+    it('launch listens on and announces the current SNApp address after a change', async () => {
+      await storageService.setIdentity(userIdentity)
+      await localDbService.setCommunity(community)
+      jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(NEW_SNAPP)
+      const createInstance = jest
+        .spyOn(libp2pService, 'createInstance')
+        .mockRejectedValue(new Error('stop after params'))
+
+      await expect(connectionsManagerService.launch(community)).rejects.toThrow('stop after params')
+
+      const params = createInstance.mock.calls[0][0]
+      expect(params.listenAddresses).toEqual([libp2pService.createLibp2pListenAddress(NEW_SNAPP)])
+      expect(params.listenAddresses[0]).toContain(`/dns4/${NEW_SNAPP}.loki/`)
+      expect(params.localAddress).toBe(createLibp2pAddress(NEW_SNAPP, userIdentity.networkInfo.peerId.id))
+    })
   })
 
   it('community is only launched once', async () => {
