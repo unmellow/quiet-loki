@@ -35,7 +35,7 @@ export enum ConnectionProcessInfo {
   LOADING_MESSAGES = 'Loading messages',
   BACKEND_MODULES = 'Initializing backend',
   REGISTERING_OWNER_CERTIFICATE = 'Registering owner certificate',
-  CONNECTING_TO_COMMUNITY = 'Connecting to community members via Tor',
+  CONNECTING_TO_COMMUNITY = 'Connecting to community members via Lokinet',
 }
 
 export interface SetConnectionProcessInfoPayload {

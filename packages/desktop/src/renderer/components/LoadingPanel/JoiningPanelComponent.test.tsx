@@ -114,19 +114,12 @@ describe('Create JoiningPanelComponent', () => {
                       </strong>
                       <br />
                       <br />
-                      Quiet stores data on 
+                      Quiet Loki stores data on 
                       <i>
                         your
                       </i>
-                       community’s devices using the battle-tested privacy tool Tor to protect your information. Tor is fast once connected, but it can be slow at first, and closing this window will stop the process of joining.
+                       community’s devices and connects them over Lokinet to protect your information. Connecting can be slow at first, and closing this window will stop the process of joining.
                     </p>
-                    <a>
-                      <p
-                        class="MuiTypography-root MuiTypography-body2 JoiningPanelComponentlink css-16d47hw-MuiTypography-root"
-                      >
-                        Learn more about Tor and Quiet
-                      </p>
-                    </a>
                   </div>
                 </div>
               </div>

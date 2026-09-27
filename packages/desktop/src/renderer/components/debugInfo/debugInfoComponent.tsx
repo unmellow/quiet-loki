@@ -331,11 +331,11 @@ export const DebugInfoComponent: React.FC = () => {
                 </td>
               </tr>
               <tr>
-                <th className={classes.th}>Tor Bootstrap</th>
+                <th className={classes.th}>Lokinet Bootstrap</th>
                 <td className={classes.td}>{torBootstrapProcess}</td>
               </tr>
               <tr>
-                <th className={classes.th}>Tor Initialized</th>
+                <th className={classes.th}>Lokinet Initialized</th>
                 <td className={classes.td}>{isTorInitialized ? 'Yes' : 'No'}</td>
               </tr>
               <tr>

@@ -87,8 +87,8 @@ export const TermsOfServiceComponent: React.FC<TermsOfServiceComponentProps> = (
         <StyledGrid container direction='column' alignItems='center' className={classes.textWrap}>
           <Grid item>
             <Typography className={classes.info}>
-              This community uses a server {qssEndPoint ? `(${qssEndPoint} )` : ''}for messaging without Tor. By joining
-              you agree to this{' '}
+              This community uses a server {qssEndPoint ? `(${qssEndPoint} )` : ''}for messaging without Lokinet. By
+              joining you agree to this{' '}
               <Typography
                 component='span'
                 style={{ textDecorationLine: 'underline', cursor: 'pointer' }}
