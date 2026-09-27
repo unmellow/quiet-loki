@@ -85,7 +85,11 @@ export class LokinetService extends EventEmitter {
           resolve(ip[1])
           return
         }
-        reject(new Error(`Lokinet DNS at ${this.dnsServer} did not resolve ${name}` + (err ? `: ${err.message}` : `\n${text}`)))
+        reject(
+          new Error(
+            `Lokinet DNS at ${this.dnsServer} did not resolve ${name}` + (err ? `: ${err.message}` : `\n${text}`)
+          )
+        )
       })
     })
   }
@@ -100,24 +104,19 @@ export class LokinetService extends EventEmitter {
 
   private lookupLocalSnapp(): Promise<string> {
     return new Promise((resolve, reject) => {
-      childProcess.exec(
-        `host localhost.loki ${this.dnsServer}`,
-        { timeout: 8000 },
-        (err, stdout, stderr) => {
-          const text = `${stdout || ''}\n${stderr || ''}`
-          const match = text.match(/([a-z0-9]{20,})\.loki/i)
-          if (match) {
-            resolve(match[0].toLowerCase())
-            return
-          }
-          reject(
-            new Error(
-              `Lokinet DNS at ${this.dnsServer} did not return localhost.loki` +
-                (err ? `: ${err.message}` : `\n${text}`)
-            )
-          )
+      childProcess.exec(`host localhost.loki ${this.dnsServer}`, { timeout: 8000 }, (err, stdout, stderr) => {
+        const text = `${stdout || ''}\n${stderr || ''}`
+        const match = text.match(/([a-z0-9]{20,})\.loki/i)
+        if (match) {
+          resolve(match[0].toLowerCase())
+          return
         }
-      )
+        reject(
+          new Error(
+            `Lokinet DNS at ${this.dnsServer} did not return localhost.loki` + (err ? `: ${err.message}` : `\n${text}`)
+          )
+        )
+      })
     })
   }
 }

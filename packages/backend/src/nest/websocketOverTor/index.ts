@@ -63,7 +63,6 @@ async function resolveLokiHost(host: string, dnsServer: string = LOKINET_DNS): P
   })
 }
 
-
 export interface WebSocketsInit extends AbortOptions, WebSocketOptions {
   filter?: MultiaddrFilter
   websocket?: ClientOptions
