@@ -25,6 +25,7 @@ import type {
 import type { Multiaddr } from '@multiformats/multiaddr'
 import type { DuplexWebSocket } from 'it-ws/duplex'
 import type { Server } from 'node:http'
+import type { EventEmitter } from 'node:events'
 import { LOKINET_LISTEN_HOST, overlayFromHost } from '@quiet/common'
 import { createServer, type WebSocketServer } from 'it-ws/server'
 
@@ -211,8 +212,11 @@ export class WebSocketListener extends TypedEventEmitter<ListenerEvents> impleme
     const _log = this.components.logger.forComponent(`libp2p:websockets:listener:${listenerType}:${this.addr}`)
     _log(`Listening on address`, this.addr, { multiaddrHost: host, overlay })
 
-    // Bind explicitly on lokitun0 (172.16.0.1) for Lokinet; it-ws typings omit host.
-    this.http!.listen(this.init.targetPort, bindHost)
+    // it-ws only proxies 'listening' / 'request' / 'close' from the http server to this.wsServer. A listen error
+    // (EADDRINUSE / EACCES) is re-emitted by it-ws's inner ws.WebSocketServer instead, and it becomes an uncaught
+    // exception there if nothing listens. Subscribe to that emitter (or to the http server if it-ws internals change)
+    // so listen() rejects with the friendly error below instead of crashing the backend.
+    const errorSource: EventEmitter = (this.wsServer as unknown as { wsServer?: EventEmitter }).wsServer ?? this.http!
 
     await new Promise<void>((resolve, reject) => {
       const onListening = (): void => {
@@ -242,13 +246,16 @@ export class WebSocketListener extends TypedEventEmitter<ListenerEvents> impleme
       }
       const removeListeners = (): void => {
         this.wsServer.removeListener('listening', onListening)
-        this.wsServer.removeListener('error', onError)
+        errorSource.removeListener('error', onError)
         this.wsServer.removeListener('drop', onDrop)
       }
 
       this.wsServer.addListener('listening', onListening)
-      this.wsServer.addListener('error', onError)
+      errorSource.addListener('error', onError)
       this.wsServer.addListener('drop', onDrop)
+
+      // Bind explicitly on lokitun0 (172.16.0.1) for Lokinet; it-ws typings omit host.
+      this.http!.listen(this.init.targetPort, bindHost)
     })
 
     this.safeDispatchEvent('listening')
