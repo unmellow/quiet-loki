@@ -259,81 +259,18 @@ describe('Create community', () => {
     expect(createCommunityInput).toHaveAttribute('type', 'text')
   })
 
-  describe('ServerOfferComponent flow', () => {
+  describe('Lokinet-only: no QSS server offer', () => {
     const OLD_ENV = process.env
     beforeEach(() => {
       jest.resetModules()
+      // Even if a build still carried the old QSS flags, the server offer must not appear.
       process.env = { ...OLD_ENV, QSS_ALLOWED: 'true', QSS_ENDPOINT: 'ws://localhost:80/' }
     })
     afterEach(() => {
       process.env = OLD_ENV
     })
 
-    it(`doesn't ServerOfferComponent when QSS_ALLOWED is true and QSS_ENDPOINT is invalid and user submits community name`, async () => {
-      const { store } = await prepareStore({
-        [StoreKeys.Socket]: {
-          ...new SocketState(),
-          isConnected: true,
-        },
-        [StoreKeys.Modals]: {
-          ...new ModalsInitialState(),
-          [ModalName.createCommunityModal]: { open: true },
-        },
-      })
-
-      process.env.QSS_ENDPOINT = ''
-
-      renderComponent(
-        <>
-          <JoinCommunity />
-          <CreateCommunity />
-        </>,
-        store
-      )
-
-      // Confirm proper modal title is displayed
-      const createCommunityDictionary = CreateCommunityDictionary()
-      const createCommunityTitle = screen.getByText(createCommunityDictionary.header)
-      expect(createCommunityTitle).toBeVisible()
-
-      // Click redirecting link
-      const link = screen.getByTestId('CreateCommunityLink')
-      await userEvent.click(link)
-
-      // Confirm user is being redirected to join community
-      const joinCommunityDictionary = JoinCommunityDictionary()
-      const joinCommunityTitle = await screen.findByText(joinCommunityDictionary.header)
-      expect(joinCommunityTitle).toBeVisible()
-
-      // ServerOffer modal should appear
-      expect(() => screen.getByTestId('ServerOffer-UseQuietServer')).toThrow()
-      expect(() => screen.getByTestId('ServerOffer-NotNow')).toThrow()
-    })
-
-    it('shows ServerOfferComponent when QSS_ALLOWED is true and QSS_ENDPOINT is valid and user submits community name', async () => {
-      const { store } = await prepareStore({
-        [StoreKeys.Socket]: {
-          ...new SocketState(),
-          isConnected: true,
-        },
-        [StoreKeys.Modals]: {
-          ...new ModalsInitialState(),
-          [ModalName.createCommunityModal]: { open: true },
-        },
-      })
-
-      renderComponent(<CreateCommunity />, store)
-      const input = screen.getByPlaceholderText('Community name')
-      const button = screen.getByText('Continue')
-      await userEvent.type(input, 'rockets')
-      await userEvent.click(button)
-
-      // ServerOffer modal should appear
-      expect(await screen.findByTestId('ServerOffer-UseQuietServer')).toBeVisible()
-      expect(screen.getByTestId('ServerOffer-NotNow')).toBeVisible()
-    })
-
-    it('dispatches createCommunity with useServer=true when user clicks "Use Quiet’s server"', async () => {
+    it('dispatches createCommunity with useServer=false and never shows the server offer', async () => {
       const { store } = await prepareStore({
         [StoreKeys.Socket]: {
           ...new SocketState(),
@@ -351,39 +288,6 @@ describe('Create community', () => {
       const button = screen.getByText('Continue')
       await userEvent.type(input, 'rockets')
       await userEvent.click(button)
-
-      const useServerBtn = await screen.findByTestId('ServerOffer-UseQuietServer')
-      await userEvent.click(useServerBtn)
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: expect.stringContaining('createCommunity'),
-          payload: expect.objectContaining({ name: 'rockets', useServer: true }),
-        })
-      )
-    })
-
-    it('dispatches createCommunity with useServer=false when user clicks "Not now"', async () => {
-      const { store } = await prepareStore({
-        [StoreKeys.Socket]: {
-          ...new SocketState(),
-          isConnected: true,
-        },
-        [StoreKeys.Modals]: {
-          ...new ModalsInitialState(),
-          [ModalName.createCommunityModal]: { open: true },
-        },
-      })
-      jest.spyOn(store, 'dispatch')
-
-      renderComponent(<CreateCommunity />, store)
-      const input = screen.getByPlaceholderText('Community name')
-      const button = screen.getByText('Continue')
-      await userEvent.type(input, 'rockets')
-      await userEvent.click(button)
-
-      const notNowBtn = await screen.findByTestId('ServerOffer-NotNow')
-      await userEvent.click(notNowBtn)
 
       expect(store.dispatch).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -391,6 +295,9 @@ describe('Create community', () => {
           payload: expect.objectContaining({ name: 'rockets', useServer: false }),
         })
       )
+      expect(screen.queryByTestId('ServerOffer-UseQuietServer')).toBeNull()
+      expect(screen.queryByTestId('ServerOffer-NotNow')).toBeNull()
+      expect(screen.queryByText('Use Quiet’s server')).toBeNull()
     })
   })
 })

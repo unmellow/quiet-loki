@@ -114,8 +114,8 @@ export const InviteComponent: FC<InviteComponentProps> = ({
         </Grid>
         <Grid item>
           <Typography variant='body2'>
-            Share this with someone who already runs Quiet Loki and Lokinet. Official Quiet / tryquiet.org will not
-            open it.
+            Share this with someone who already runs Quiet Loki and Lokinet. Official Quiet / tryquiet.org will not open
+            it.
           </Typography>
           <Typography variant='body2' className={classes.hint}>
             Both of you need lokitun0 up. Paste the link in Quiet Loki → Join community.
