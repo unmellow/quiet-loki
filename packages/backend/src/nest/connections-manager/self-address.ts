@@ -1,3 +1,5 @@
+import type { UserProfile } from '@quiet/types'
+
 /**
  * Reconciles our own overlay (Lokinet SNApp) address at community launch.
  *
@@ -76,4 +78,23 @@ export const replaceSelfAddressInMultiaddr = (
   const [, host, rest] = match
   if (!sameAddress(host, oldAddress)) return multiaddr
   return `/dns4/${normalizeSelfAddress(newAddress)}.loki${rest}`
+}
+
+/**
+ * Returns a copy of our own replicated user profile with `userData.onionAddress` set to `newAddress`, or undefined if
+ * nothing needs to change (no userData, not our peer, or already on the new address). All other profile fields are kept.
+ *
+ * The invite in the renderer is built from these replicated profiles, so a stale `onionAddress` here keeps handing out
+ * the old owner address after the SNApp changed.
+ */
+export const withSelfProfileAddress = (
+  profile: UserProfile,
+  ownPeerId: string,
+  newAddress: string
+): UserProfile | undefined => {
+  const userData = profile.userData
+  if (!userData || userData.peerId !== ownPeerId) return undefined
+  if (!normalizeSelfAddress(newAddress)) return undefined
+  if (sameAddress(userData.onionAddress, newAddress)) return undefined
+  return { ...profile, userData: { ...userData, onionAddress: normalizeSelfAddress(newAddress) } }
 }

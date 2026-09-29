@@ -1,5 +1,10 @@
 import { describe, expect, it, jest } from '@jest/globals'
-import { normalizeSelfAddress, reconcileSelfAddress, replaceSelfAddressInMultiaddr } from './self-address'
+import {
+  normalizeSelfAddress,
+  reconcileSelfAddress,
+  replaceSelfAddressInMultiaddr,
+  withSelfProfileAddress,
+} from './self-address'
 
 const OLD = 'hrqqi1561hus3n8djnhnd4u3wxquwhtryxii4sskm595df7fdouy'
 const NEW = 'odgz5hjgorj3kbhjdpi3u9xdmjzdxxp4qqpfjtzuxzcukdasnrcy'
@@ -73,5 +78,35 @@ describe('normalizeSelfAddress', () => {
     expect(normalizeSelfAddress(` ${NEW}.loki `)).toBe(NEW)
     expect(normalizeSelfAddress(`${NEW}.onion`)).toBe(NEW)
     expect(normalizeSelfAddress(`${NEW}.loki.`)).toBe(NEW)
+  })
+})
+
+describe('withSelfProfileAddress', () => {
+  const profile = {
+    userId: 'user1',
+    nickname: 'alice',
+    bio: 'hi',
+    userData: { onionAddress: OLD, peerId: PEER },
+  }
+
+  it('returns a copy of our profile with the new bare address, keeping other fields', () => {
+    const updated = withSelfProfileAddress(profile, PEER, `${NEW}.loki`)
+    expect(updated).toEqual({ ...profile, userData: { onionAddress: NEW, peerId: PEER } })
+    expect(profile.userData.onionAddress).toBe(OLD) // input not mutated
+  })
+
+  it('returns undefined when nothing changes (idempotent)', () => {
+    expect(withSelfProfileAddress(profile, PEER, `${OLD}.loki`)).toBeUndefined()
+    const updated = withSelfProfileAddress(profile, PEER, NEW)!
+    expect(withSelfProfileAddress(updated, PEER, NEW)).toBeUndefined()
+  })
+
+  it("does not touch someone else's profile or a profile without userData", () => {
+    expect(withSelfProfileAddress(profile, OTHER_PEER, NEW)).toBeUndefined()
+    expect(withSelfProfileAddress({ userId: 'u', nickname: 'n' }, PEER, NEW)).toBeUndefined()
+  })
+
+  it('ignores an empty new address', () => {
+    expect(withSelfProfileAddress(profile, PEER, ' ')).toBeUndefined()
   })
 })

@@ -285,6 +285,61 @@ describe('StorageService', () => {
       expect(timeoutSpy).not.toHaveBeenCalled()
     })
 
+    describe('own user profile address after a SNApp change', () => {
+      const OLD = 'hrqqi1561hus3n8djnhnd4u3wxquwhtryxii4sskm595df7fdouy'
+      const NEW = 'odgz5hjgorj3kbhjdpi3u9xdmjzdxxp4qqpfjtzuxzcukdasnrcy'
+      const PEER = '12D3KooWQtk3piRtkLQniSjLj6MJ2ASM7iVCnjCTUx6RUmevaKEU'
+      const profileWith = (onionAddress: string): UserProfile =>
+        ({ userId: 'u1', nickname: 'alice', userData: { onionAddress, peerId: PEER } }) as UserProfile
+
+      it('rewrites our stored profile with the new address via setEntry', async () => {
+        jest.spyOn(userProfileStore, 'getEntry').mockResolvedValue(profileWith(OLD))
+        const setEntry = jest.spyOn(userProfileStore, 'setEntry').mockResolvedValue({} as any)
+
+        await expect(storageService.updateSelfProfileAddress('u1', PEER, `${NEW}.loki`)).resolves.toBe(true)
+
+        expect(setEntry).toHaveBeenCalledTimes(1)
+        expect(setEntry).toHaveBeenCalledWith('u1', profileWith(NEW))
+      })
+
+      it('does nothing when the profile already has the address', async () => {
+        jest.spyOn(userProfileStore, 'getEntry').mockResolvedValue(profileWith(NEW))
+        const setEntry = jest.spyOn(userProfileStore, 'setEntry').mockResolvedValue({} as any)
+        await expect(storageService.updateSelfProfileAddress('u1', PEER, NEW)).resolves.toBe(false)
+        expect(setEntry).not.toHaveBeenCalled()
+      })
+
+      it('does nothing when there is no stored own profile yet (fresh join queues its own)', async () => {
+        jest.spyOn(userProfileStore, 'getEntry').mockRejectedValue(new Error('Entry with key u1 not found'))
+        const setEntry = jest.spyOn(userProfileStore, 'setEntry').mockResolvedValue({} as any)
+        await expect(storageService.updateSelfProfileAddress('u1', PEER, NEW)).resolves.toBe(false)
+        expect(setEntry).not.toHaveBeenCalled()
+      })
+
+      it('does not throw when the write fails (queued for flush)', async () => {
+        jest.spyOn(userProfileStore, 'getEntry').mockResolvedValue(profileWith(OLD))
+        jest.spyOn(userProfileStore, 'setEntry').mockRejectedValue(new Error('not a member'))
+        await expect(storageService.updateSelfProfileAddress('u1', PEER, NEW)).resolves.toBe(false)
+      })
+
+      it('storage init repairs the own profile from the (already reconciled) identity', async () => {
+        const identity = {
+          communityId: community.id,
+          userId: sigchainService.user.userId,
+          networkInfo: {
+            peerId: { id: PEER },
+            hiddenService: { onionAddress: NEW, privateKey: 'k' },
+          },
+        } as unknown as Identity
+        await localDbService.setIdentity(identity)
+        const update = jest.spyOn(storageService, 'updateSelfProfileAddress').mockResolvedValue(true)
+
+        await storageService.init()
+
+        expect(update).toHaveBeenCalledWith(identity.userId, PEER, NEW)
+      })
+    })
+
     it('should set and get identity via localDbService', async () => {
       await storageService.init()
       const identity = { userId: sigchainService.user.userId, nickname: 'Alice' } as unknown as Identity

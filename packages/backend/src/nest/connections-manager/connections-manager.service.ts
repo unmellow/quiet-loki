@@ -914,7 +914,7 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
     return result.address
   }
 
-  /** Replace our stale overlay address in the stored identity, the community peer list and our own peer stats. */
+  /** Replace our stale overlay address in the stored identity, community peer list, own peer stats and own user profile. */
   private async persistSelfAddressChange(
     communityId: string,
     identity: Identity,
@@ -943,6 +943,10 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
         await this.localDbService.setCommunity({ ...community, peerList })
       }
     }
+
+    // Our replicated user profile is what Add Members builds invites from. Storage isn't open yet on a normal launch
+    // (StorageService.init reconciles the profile from the identity we just wrote), but if it already is, update it now.
+    await this.storageService.updateSelfProfileAddress(identity.userId, ownPeerId, newAddress)
 
     const ownStats = await this.localDbService.getPeerStats(ownPeerId)
     if (ownStats?.address) {
