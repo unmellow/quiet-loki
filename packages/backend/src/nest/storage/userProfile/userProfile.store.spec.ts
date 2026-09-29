@@ -109,6 +109,20 @@ describe('UserProfileStore', () => {
     expect(result[0]).toEqual(UserProfileStore.sanitizeUserProfile(userProfile))
   })
 
+  test('rewriting the own profile with a new onionAddress replaces the entry in place (no duplicate)', async () => {
+    const withAddress = (onionAddress: string): UserProfile => ({
+      ...userProfile,
+      userData: { onionAddress, peerId: 'peer1' },
+    })
+    await userProfileStore.setEntry(userProfile.userId, withAddress('oldaddress'))
+    await userProfileStore.setEntry(userProfile.userId, withAddress('newaddress'))
+
+    const profiles = await userProfileStore.getUserProfiles()
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0].userData).toEqual({ onionAddress: 'newaddress', peerId: 'peer1' })
+    expect(profiles[0].nickname).toEqual(userProfile.nickname)
+  })
+
   test('should cache userId to nickname mapping', async () => {
     const entry = await userProfileStore.setEntry(userProfile.userId, userProfile)
     expect(entry).toBeDefined()

@@ -15,6 +15,7 @@ import {
 import { IPFS_REPO_PATCH, ORBIT_DB_DIR, QUIET_DIR } from '../const'
 import { LocalDbService } from '../local-db/local-db.service'
 import { createLogger } from '../common/logger'
+import { withSelfProfileAddress } from '../connections-manager/self-address'
 import { removeFiles, removeDirs, createPaths, removeFilesFromDir } from '../common/utils'
 import { type PurgeDataOptions, StorageEvents } from './storage.types'
 import { IpfsService } from '../ipfs/ipfs.service'
@@ -107,6 +108,7 @@ export class StorageService extends EventEmitter {
     this.logger.info(`Initializing Databases`)
     await this.initDatabases()
     await this.migrateMissingSelfUserProfile()
+    await this.reconcileSelfProfileAddress()
 
     if (teamId != null) {
       this.addTeamIdToDbMetas(teamId)
@@ -162,6 +164,30 @@ export class StorageService extends EventEmitter {
     const response = await this.addUserProfile(cachedProfile)
     if (!response.success) {
       this.logger.warn('Failed to migrate cached self user profile', selfUserId, response.error)
+    }
+  }
+
+  /**
+   * Keep our replicated user profile on the address the identity currently holds. The identity is rewritten first by
+   * ConnectionsManager's SNApp reconcile (#20) when the Lokinet address changed; storage opens after that, so this is
+   * where the profile store is available. Idempotent, and it also repairs a profile left stale by a previous launch
+   * that changed the address but didn't get to update the profile.
+   */
+  private async reconcileSelfProfileAddress(): Promise<void> {
+    try {
+      const activeChain = this.sigchainService.getActiveChain(false)
+      if (!activeChain?.team || !activeChain.roles.amIMember()) return
+      const community = await this.localDbService.getCurrentCommunity()
+      if (!community) return
+      const identity = await this.localDbService.getIdentity(community.id)
+      if (!identity || identity.userId !== activeChain.user.userId) return
+      await this.updateSelfProfileAddress(
+        identity.userId,
+        identity.networkInfo.peerId.id,
+        identity.networkInfo.hiddenService.onionAddress
+      )
+    } catch (err) {
+      this.logger.warn('Failed to reconcile own user profile address', err)
     }
   }
 
@@ -355,6 +381,35 @@ export class StorageService extends EventEmitter {
       this.logger.warn('User profile deferred:', profile.userId, err)
     }
     return { success: true }
+  }
+
+  /**
+   * Rewrite our own replicated user-profile entry when our overlay address changed (Lokinet SNApp keys change on
+   * restart). Invites are built from these entries. The entry is keyed by userId, so this overwrites it in place (no
+   * duplicate) through the normal signed/encrypted `setEntry`, which replicates like any profile update.
+   * Idempotent: does nothing when the stored profile already has the address, or we have no stored profile yet
+   * (a fresh join queues its profile with the current address).
+   * @returns true if the entry was rewritten
+   */
+  public async updateSelfProfileAddress(userId: string, ownPeerId: string, address: string): Promise<boolean> {
+    let profile: UserProfile
+    try {
+      profile = await this.userProfileStore.getEntry(userId)
+    } catch (err) {
+      this.logger.trace('No stored own user profile to update with new address', userId)
+      return false
+    }
+    const updated = withSelfProfileAddress(profile, ownPeerId, address)
+    if (!updated) return false
+    try {
+      await this.userProfileStore.setEntry(userId, updated)
+    } catch (err) {
+      // e.g. not (yet) a member: setEntry keeps the profile queued and flushes it once permitted
+      this.logger.warn('Own user profile address update deferred:', userId, err)
+      return false
+    }
+    this.logger.info(`Updated own user profile address to ${updated.userData?.onionAddress}`)
+    return true
   }
 
   public async deferUserProfile(profile: UserProfile): Promise<SetUserProfileResponse> {

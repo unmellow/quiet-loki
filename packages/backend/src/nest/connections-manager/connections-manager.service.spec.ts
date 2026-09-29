@@ -251,6 +251,7 @@ describe('ConnectionsManagerService', () => {
       const registerHiddenService = jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(stored)
       const spawnHiddenService = jest.spyOn(tor, 'spawnHiddenService')
       const setIdentity = jest.spyOn(storageService, 'setIdentity')
+      const updateProfile = jest.spyOn(storageService, 'updateSelfProfileAddress')
 
       const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
 
@@ -263,6 +264,7 @@ describe('ConnectionsManagerService', () => {
       })
       expect(spawnHiddenService).not.toHaveBeenCalled()
       expect(setIdentity).not.toHaveBeenCalled()
+      expect(updateProfile).not.toHaveBeenCalled()
       expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Lokinet SNApp address changed'))
     })
 
@@ -303,6 +305,7 @@ describe('ConnectionsManagerService', () => {
         [ownPeerId]: { peerId: ownPeerId, address: oldSelf, lastSeen: 1, connectionTime: 0 },
       })
       jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(`${NEW_SNAPP}.loki`)
+      const updateProfile = jest.spyOn(storageService, 'updateSelfProfileAddress').mockResolvedValue(true)
 
       const onionAddress = await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
 
@@ -310,6 +313,7 @@ describe('ConnectionsManagerService', () => {
       expect(warnSpy).toHaveBeenCalledWith(
         `Lokinet SNApp address changed from ${stored}.loki to ${NEW_SNAPP}.loki; invites for the old address will no longer work`
       )
+      expect(updateProfile).toHaveBeenCalledWith(userIdentity.userId, ownPeerId, NEW_SNAPP)
       const identity = await storageService.getIdentity(community.id)
       expect(identity?.networkInfo.hiddenService.onionAddress).toBe(NEW_SNAPP)
       expect(identity?.networkInfo.peerId).toEqual(userIdentity.networkInfo.peerId)
