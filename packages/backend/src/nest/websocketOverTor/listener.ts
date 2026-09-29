@@ -58,6 +58,7 @@ export class WebSocketListener extends TypedEventEmitter<ListenerEvents> impleme
   private readonly metrics: WebSocketListenerMetrics
   private readonly sockets: Set<net.Socket>
   private readonly upgrader: Upgrader
+  private bound = false
   private readonly inboundConnectionUpgradeTimeout: number
   private readonly httpOptions?: http.ServerOptions
   private http?: http.Server
@@ -258,10 +259,17 @@ export class WebSocketListener extends TypedEventEmitter<ListenerEvents> impleme
       this.http!.listen(this.init.targetPort, bindHost)
     })
 
+    this.bound = true
     this.safeDispatchEvent('listening')
   }
 
   async close(): Promise<void> {
+    // A listener whose listen() failed (e.g. EADDRINUSE) never bound a server; closing it would throw
+    // "Server is not running." and break libp2p.stop(). Nothing to tear down in that case.
+    if (!this.bound) {
+      this.safeDispatchEvent('close')
+      return
+    }
     // close all connections, must be done after closing the server to prevent
     // race conditions where a new connection is accepted while we are closing
     // the existing ones
