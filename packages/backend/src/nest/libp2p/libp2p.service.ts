@@ -18,7 +18,7 @@ import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common'
 import { EventEmitter } from 'events'
 import { DateTime } from 'luxon'
 
-import { createLibp2pAddress, createLibp2pListenAddress } from '@quiet/common'
+import { createLibp2pAddress, createLibp2pListenAddress, LOKINET_LISTEN_HOST } from '@quiet/common'
 import { ConnectionProcessInfo, type NetworkDataPayload, NetworkStats, SocketEvents } from '@quiet/types'
 
 import { LIBP2P_DB_PATH, SERVER_IO_PROVIDER } from '../const'
@@ -574,11 +574,11 @@ export class Libp2pService extends EventEmitter implements OnModuleDestroy {
     if (maybeAuth != null) {
       this.authService = maybeAuth as Libp2pAuth
     }
-    await this.afterCreation(params.peerId)
+    await this.afterCreation(params.peerId, { listenAddresses: params.listenAddresses, targetPort: params.targetPort })
     return libp2p
   }
 
-  private async afterCreation(peerId: CreatedLibp2pPeerId) {
+  private async afterCreation(peerId: CreatedLibp2pPeerId, listen?: { listenAddresses: string[]; targetPort: number }) {
     this.logger.debug(`Performing post-creation setup of libp2p instance`)
 
     if (!this.libp2pInstance) {
@@ -733,7 +733,20 @@ export class Libp2pService extends EventEmitter implements OnModuleDestroy {
 
     if ([Libp2pState.Stopping, Libp2pState.Stopped].includes(this.state)) return
     this.logger.debug(`Starting libp2p`)
+    // faultTolerance NO_FATAL makes libp2p swallow a failed listen (e.g. EADDRINUSE), so start() succeeds and the node
+    // runs with no listener. Count successful listeners so we can detect that after start().
+    let listeningCount = 0
+    this.libp2pInstance.addEventListener('transport:listening', () => {
+      listeningCount += 1
+    })
     await this.libp2pInstance.start()
+    if (
+      listen &&
+      listen.listenAddresses.length > 0 &&
+      ![Libp2pState.Stopping, Libp2pState.Stopped].includes(this.state)
+    ) {
+      await this.assertListening(listeningCount, listen.targetPort)
+    }
     if (this.state === Libp2pState.Paused) {
       await this.pause()
     } else if (this.state === Libp2pState.Starting) {
@@ -761,6 +774,25 @@ export class Libp2pService extends EventEmitter implements OnModuleDestroy {
     }, 60_000)
 
     this.logger.debug(`Initialized libp2p for peer ${peerId.peerId.toString()}`)
+  }
+
+  /**
+   * A bound listener is one that dispatched libp2p's 'transport:listening' event during start().
+   *
+   * libp2p is configured with FaultTolerance.NO_FATAL, so if the WebSocket listener can't bind (EADDRINUSE / EACCES) the
+   * transport manager swallows the failure and start() resolves with no listener: the peer can't be dialled and the
+   * join hangs until it times out. Fail loudly with the friendly bind error instead.
+   */
+  private async assertListening(listeningCount: number, targetPort: number): Promise<void> {
+    if (listeningCount > 0) return
+    const message =
+      `Cannot bind libp2p WebSocket on ${LOKINET_LISTEN_HOST}:${targetPort}: no WebSocket listener is bound ` +
+      `(the port is probably already in use by another Quiet instance, or not permitted). ` +
+      `Set LOKINET_WS_PORT to a free high port (e.g. 8081) or stop the other instance.`
+    this.logger.error(message)
+    // Don't leave a listener-less libp2p node running.
+    await this.close()
+    throw new Error(message)
   }
 
   public async cleanDatastore(): Promise<void> {

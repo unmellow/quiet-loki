@@ -44,6 +44,91 @@ describe('Libp2pService', () => {
     expect(libp2pService?.libp2pInstance?.peerId.toString()).toBe(params.peerId.peerId.toString())
   })
 
+  describe('WebSocket listen verification (faultTolerance NO_FATAL swallows bind failures)', () => {
+    beforeAll(async () => {
+      // Stop the real instance left running by the first test so its listener doesn't leak or hold the port.
+      await libp2pService.close()
+    })
+
+    afterEach(async () => {
+      await libp2pService.close() // stops whatever instance the test left (fake or real)
+      await libp2pService.resume()
+    })
+
+    const fakeLibp2p = (dispatchListening: boolean) => {
+      const listeners: Array<() => void> = []
+      return {
+        addEventListener: jest.fn((event: string, cb: () => void) => {
+          if (event === 'transport:listening') listeners.push(cb)
+        }),
+        start: jest.fn(async () => {
+          if (dispatchListening) listeners.forEach(cb => cb())
+        }),
+        stop: jest.fn(async () => {}),
+      }
+    }
+    const listen = { listenAddresses: ['/dns4/localhost.loki/tcp/8080/ws'], targetPort: 8080 }
+
+    it('resolves when a WebSocket listener is bound', async () => {
+      libp2pService['setState'](Libp2pState.Starting)
+      libp2pService.libp2pInstance = fakeLibp2p(true) as any
+      jest.spyOn(libp2pService, 'resumeDialQueue').mockImplementation(() => {})
+
+      await expect(libp2pService['afterCreation'](params.peerId, listen)).resolves.toBeUndefined()
+      expect(libp2pService.state).toBe(Libp2pState.Started)
+    })
+
+    it('throws the friendly "Cannot bind libp2p WebSocket" error and stops libp2p when no listener bound', async () => {
+      libp2pService['setState'](Libp2pState.Starting)
+      const fake = fakeLibp2p(false)
+      libp2pService.libp2pInstance = fake as any
+      jest.spyOn(libp2pService, 'hangUpPeers').mockResolvedValue(undefined)
+
+      await expect(libp2pService['afterCreation'](params.peerId, listen)).rejects.toThrow(
+        /^Cannot bind libp2p WebSocket on .*:8080/
+      )
+      expect(fake.stop).toHaveBeenCalled()
+      expect(libp2pService.libp2pInstance).toBeNull()
+      expect(libp2pService.state).toBe(Libp2pState.Stopped)
+    })
+
+    it('does not require a listener when there are no listen addresses (dial-only)', async () => {
+      libp2pService['setState'](Libp2pState.Starting)
+      libp2pService.libp2pInstance = fakeLibp2p(false) as any
+      jest.spyOn(libp2pService, 'resumeDialQueue').mockImplementation(() => {})
+
+      await expect(
+        libp2pService['afterCreation'](params.peerId, { listenAddresses: [], targetPort: 8080 })
+      ).resolves.toBeUndefined()
+    })
+
+    it('createInstance rejects with the bind error when the port is already taken (real libp2p)', async () => {
+      await libp2pService.close()
+      const net = await import('node:net')
+      const { LOKINET_LISTEN_HOST } = await import('@quiet/common')
+      const clashParams = await libp2pInstanceParams()
+      const blocker = net.createServer()
+      await new Promise<void>((resolve, reject) => {
+        blocker.once('error', reject)
+        blocker.listen(clashParams.targetPort, LOKINET_LISTEN_HOST, () => resolve())
+      })
+      try {
+        await expect(libp2pService.createInstance(clashParams)).rejects.toThrow(
+          `Cannot bind libp2p WebSocket on ${LOKINET_LISTEN_HOST}:${clashParams.targetPort}`
+        )
+        expect(libp2pService.libp2pInstance).toBeNull()
+      } finally {
+        await new Promise<void>(resolve => blocker.close(() => resolve()))
+      }
+    })
+
+    it('createInstance succeeds when the port is free (real libp2p)', async () => {
+      await libp2pService.close()
+      await libp2pService.createInstance(await libp2pInstanceParams())
+      expect(libp2pService.libp2pInstance).not.toBeNull()
+    })
+  })
+
   it('close libp2p service', async () => {
     await libp2pService.createInstance(params)
     await libp2pService.close()
