@@ -14,8 +14,11 @@ import { type BackendLeaveCommunityMessage } from '@quiet/types'
 import { updateDesktopFile, processInvitationCode } from './invitation'
 import {
   BACKEND_EXIT_TIMEOUT_MS,
+  CHILD_GONE_GRACE_MS,
+  CHILD_GONE_GRACE_NO_BACKEND_MS,
   STATE_SAVED_TIMEOUT_MS,
   createWatchdog,
+  installQuitOnChildGone,
   installQuitOnSigterm,
   killIfStillRunning,
 } from './shutdownWatchdog'
@@ -32,6 +35,8 @@ let SOCKET_IO_SECRET: string | undefined = undefined
 let updating = false
 let rendererReady = false
 let quitting = false
+/** Set when SIGTERM arrived, before Electron's before-quit has necessarily run. */
+let terminationRequested = false
 
 const updaterInterval = 15 * 60_000
 
@@ -536,6 +541,19 @@ export const quitWatchdogs = {
     }
     // After the kill the backend 'close' event runs the normal state-save / quit path.
   }),
+  /** A GPU/zygote/utility/renderer process was lost while quitting; the backend is still shutting down. */
+  childGone: createWatchdog(CHILD_GONE_GRACE_MS, () => {
+    logger.warn(`Child process lost while quitting and still not exited after ${CHILD_GONE_GRACE_MS} ms, exiting`)
+    killIfStillRunning(backendProcess)
+    app.exit(0)
+  }),
+  /** Same, but the backend has already exited. */
+  childGoneNoBackend: createWatchdog(CHILD_GONE_GRACE_NO_BACKEND_MS, () => {
+    logger.warn(
+      `Child process lost while quitting and main still alive after ${CHILD_GONE_GRACE_NO_BACKEND_MS} ms, exiting`
+    )
+    app.exit(0)
+  }),
   stateSaved: createWatchdog(STATE_SAVED_TIMEOUT_MS, () => {
     logger.warn(`Renderer did not confirm state-saved within ${STATE_SAVED_TIMEOUT_MS} ms, quitting`)
     app.exit(0)
@@ -1023,6 +1041,18 @@ app.on('before-quit', e => {
 // systemd / `kill` send SIGTERM: go through the normal quit path (before-quit → backend 'close' → state save).
 installQuitOnSigterm(
   process,
-  () => app.quit(),
+  () => {
+    terminationRequested = true
+    app.quit()
+  },
   message => logger.info(message)
+)
+
+// With KillMode=control-group SIGTERM hits Chromium's helper processes too; losing them during quit used to leave main
+// alive (idle) until SIGKILL. Registered after all other app.on handlers.
+installQuitOnChildGone(
+  app,
+  () => quitting || terminationRequested,
+  () => (backendProcess ? quitWatchdogs.childGone : quitWatchdogs.childGoneNoBackend).arm(),
+  message => logger.warn(message)
 )
