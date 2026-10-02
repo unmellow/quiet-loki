@@ -65,3 +65,14 @@ describe('connectionReducer', () => {
     expect(text).toEqual(ConnectionProcessInfo.BACKEND_MODULES)
   })
 })
+
+describe('ConnectionProcessInfo wording', () => {
+  // Quiet Loki is Lokinet-only. This enum value is shown in the connecting overlay and logged by the renderer and the
+  // backend bundle. It is read from the built @quiet/types (packages/types/lib), so a stale lib fails this test too.
+  it('says Lokinet, not Tor, for every connection process step', () => {
+    expect(ConnectionProcessInfo.CONNECTING_TO_COMMUNITY).toBe('Connecting to community members via Lokinet')
+    for (const text of Object.values(ConnectionProcessInfo)) {
+      expect(text).not.toMatch(/\bTor\b/)
+    }
+  })
+})
