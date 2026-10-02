@@ -10,6 +10,7 @@ import {
   startRuntime,
   stopRuntime,
 } from './runtime'
+import { installServeSignalHandlers } from './shutdown'
 
 async function withRuntime(dataDir: string | undefined, fn: (rt: Awaited<ReturnType<typeof startRuntime>>) => Promise<void>) {
   const rt = await startRuntime({ dataDir })
@@ -74,12 +75,14 @@ program
   .description('Keep backend-bundle running')
   .action(async () => {
     const rt = await startRuntime({ dataDir: program.opts().dataDir })
+    // Install before anything else awaits so a SIGTERM during startup status doesn't orphan the backend.
+    installServeSignalHandlers({
+      child: rt.child,
+      closeClient: () => rt.socket.close(),
+      log: message => console.error(`headless: ${message}`),
+    })
     console.error(`headless backend-bundle up PID=${rt.child.pid} socket=127.0.0.1:${rt.port}. Ctrl-C to stop.`)
     await cmdStatus(rt)
-    process.on('SIGINT', async () => {
-      await stopRuntime(rt)
-      process.exit(0)
-    })
     await new Promise(() => undefined)
   })
 
