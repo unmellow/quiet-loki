@@ -7,7 +7,13 @@ jest.mock('./shutdownWatchdog', () => ({
 
 import * as main from './main'
 import * as backendHelpers from './backendHelpers'
-import { BACKEND_EXIT_TIMEOUT_MS, STATE_SAVED_TIMEOUT_MS, installQuitOnSigterm } from './shutdownWatchdog'
+import {
+  BACKEND_EXIT_TIMEOUT_MS,
+  CHILD_GONE_GRACE_MS,
+  CHILD_GONE_GRACE_NO_BACKEND_MS,
+  STATE_SAVED_TIMEOUT_MS,
+  installQuitOnSigterm,
+} from './shutdownWatchdog'
 
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow, app, ipcMain, Menu } from 'electron'
@@ -285,6 +291,37 @@ describe('additional quit flow scenarios', () => {
     expect(app.quit).toHaveBeenCalledTimes(1)
   })
 
+  describe('GPU/zygote/utility process lost during quit', () => {
+    const childGone = () => mockAppOnCalls.find(c => c[0] === 'child-process-gone')[1]
+    const cancelAll = () => {
+      main.quitWatchdogs.childGone.cancel()
+      main.quitWatchdogs.childGoneNoBackend.cancel()
+      main.quitWatchdogs.backendExit.cancel()
+    }
+
+    it('exits main after a short grace, killing the backend if it is still running', () => {
+      jest.useFakeTimers()
+      try {
+        cancelAll()
+        const backend = forkMock.mock.results[0].value
+        backend.kill.mockClear()
+        ;(app.exit as jest.Mock).mockClear()
+        ;(installQuitOnSigterm as jest.Mock).mock.calls[0][1]() // SIGTERM ⇒ terminating, even before before-quit ran
+
+        childGone()({}, { type: 'GPU', reason: 'launch-failed' })
+        expect(main.quitWatchdogs.childGone.armed).toBe(true)
+        jest.advanceTimersByTime(CHILD_GONE_GRACE_MS - 1)
+        expect(app.exit).not.toHaveBeenCalled()
+        jest.advanceTimersByTime(1)
+        expect(backend.kill).toHaveBeenCalledWith('SIGKILL')
+        expect(app.exit).toHaveBeenCalledWith(0)
+      } finally {
+        cancelAll()
+        jest.useRealTimers()
+      }
+    })
+  })
+
   it('before-quit kills the backend if it has not exited within the timeout', () => {
     jest.useFakeTimers()
     try {
@@ -337,6 +374,42 @@ describe('additional quit flow scenarios', () => {
 
     expect(app.quit).toHaveBeenCalled()
     expect(main.quitWatchdogs.stateSaved.armed).toBe(false)
+  })
+
+  describe('GPU/zygote/utility process lost during quit', () => {
+    const childGone = () => mockAppOnCalls.find(c => c[0] === 'child-process-gone')[1]
+    const cancelAll = () => {
+      main.quitWatchdogs.childGone.cancel()
+      main.quitWatchdogs.childGoneNoBackend.cancel()
+      main.quitWatchdogs.backendExit.cancel()
+    }
+
+    it('uses the shorter grace once the backend has already exited', () => {
+      jest.useFakeTimers()
+      try {
+        cancelAll()
+        const backend = forkMock.mock.results[0].value
+        const closeCb = backend.on.mock.calls.find((c: any[]) => c[0] === 'close')[1]
+        closeCb() // backend exited (arms stateSaved; unrelated here)
+        main.quitWatchdogs.stateSaved.cancel()
+        ;(app.exit as jest.Mock).mockClear()
+
+        childGone()({}, { type: 'Utility', reason: 'crashed' })
+        expect(main.quitWatchdogs.childGoneNoBackend.armed).toBe(true)
+        expect(main.quitWatchdogs.childGone.armed).toBe(false)
+        jest.advanceTimersByTime(CHILD_GONE_GRACE_NO_BACKEND_MS - 1)
+        expect(app.exit).not.toHaveBeenCalled()
+        jest.advanceTimersByTime(1)
+        expect(app.exit).toHaveBeenCalledWith(0)
+      } finally {
+        cancelAll()
+        jest.useRealTimers()
+      }
+    })
+
+    it('registers render-process-gone as well', () => {
+      expect(mockAppOnCalls.some(c => c[0] === 'render-process-gone')).toBe(true)
+    })
   })
 })
 

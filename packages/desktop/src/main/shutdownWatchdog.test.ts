@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { createWatchdog, installQuitOnSigterm, killIfStillRunning } from './shutdownWatchdog'
+import { createWatchdog, installQuitOnChildGone, installQuitOnSigterm, killIfStillRunning } from './shutdownWatchdog'
 
 describe('createWatchdog', () => {
   beforeEach(() => jest.useFakeTimers())
@@ -63,5 +63,56 @@ describe('installQuitOnSigterm', () => {
 
     expect(quit).toHaveBeenCalledTimes(1)
     expect(log).toHaveBeenCalledWith('SIGTERM received again, quit already in progress')
+  })
+})
+
+describe('installQuitOnChildGone', () => {
+  const setup = (quitting: boolean) => {
+    const emitter = new EventEmitter()
+    const arm = jest.fn()
+    const log = jest.fn()
+    installQuitOnChildGone(emitter, () => quitting, arm, log)
+    return { emitter, arm, log }
+  }
+
+  it('arms the forced exit when a GPU/zygote/utility process is lost while quitting', () => {
+    const { emitter, arm, log } = setup(true)
+    emitter.emit('child-process-gone', {}, { type: 'GPU', reason: 'launch-failed' })
+    emitter.emit('child-process-gone', {}, { type: 'Zygote', reason: 'killed' })
+    emitter.emit('child-process-gone', {}, { type: 'Utility', reason: 'crashed', name: 'Network Service' })
+    expect(arm).toHaveBeenCalledTimes(3)
+    expect(log).toHaveBeenCalledWith('GPU process gone while quitting (launch-failed), arming forced exit')
+  })
+
+  it('arms when a renderer is lost while quitting (event, webContents, details)', () => {
+    const { emitter, arm } = setup(true)
+    emitter.emit('render-process-gone', {}, {}, { reason: 'killed' })
+    expect(arm).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores clean exits, which are normal during quit', () => {
+    const { emitter, arm } = setup(true)
+    emitter.emit('child-process-gone', {}, { type: 'Utility', reason: 'clean-exit' })
+    emitter.emit('render-process-gone', {}, {}, { reason: 'clean-exit' })
+    expect(arm).not.toHaveBeenCalled()
+  })
+
+  it('does nothing outside of quit (a GPU crash during normal use is not our business)', () => {
+    const { emitter, arm } = setup(false)
+    emitter.emit('child-process-gone', {}, { type: 'GPU', reason: 'crashed' })
+    emitter.emit('render-process-gone', {}, {}, { reason: 'crashed' })
+    expect(arm).not.toHaveBeenCalled()
+  })
+
+  it('reads the quitting state at event time', () => {
+    const emitter = new EventEmitter()
+    const arm = jest.fn()
+    let quitting = false
+    installQuitOnChildGone(emitter, () => quitting, arm)
+    emitter.emit('child-process-gone', {}, { type: 'GPU', reason: 'crashed' })
+    expect(arm).not.toHaveBeenCalled()
+    quitting = true
+    emitter.emit('child-process-gone', {}, { type: 'GPU', reason: 'crashed' })
+    expect(arm).toHaveBeenCalledTimes(1)
   })
 })
