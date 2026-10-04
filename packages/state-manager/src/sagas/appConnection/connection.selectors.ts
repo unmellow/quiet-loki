@@ -64,7 +64,18 @@ export const peerList = createSelector(
         })
         .filter((address): address is string => address !== null && address !== undefined)
     }
-    const filteredAndSortedPeers = filterAndSortPeers(arr, stats, localPeerAddress, true, connectedPeers)
+    // The renderer's Identity can hold a stale SNApp address (Lokinet generates a new one on restart and the identity is
+    // only refreshed in the backend). The replicated user profile of our own peer is kept current by the backend, so
+    // when it exists it replaces the local address instead of being listed after it (r6664: dead address came first).
+    const ownPeerId = localPeerAddress?.split('/p2p/')[1]
+    const ownProfileAddress = ownPeerId ? arr.find(address => address.endsWith(`/p2p/${ownPeerId}`)) : undefined
+    const filteredAndSortedPeers = filterAndSortPeers(
+      arr,
+      stats,
+      ownProfileAddress ?? localPeerAddress,
+      true,
+      connectedPeers
+    )
     return filteredAndSortedPeers
   }
 )
