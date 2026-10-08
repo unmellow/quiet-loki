@@ -109,3 +109,35 @@ export function getValidInvitationUrlTestData<T extends InvitationData>(data: T)
 //     data: data,
 //   }
 // }
+
+/**
+ * Test helper: make the global `URL` parse custom (non-special) schemes the way the Electron 32 / Chromium 128 renderer
+ * does, which differs from Node and jsdom (whatwg-url): `new URL('quiet-loki://join#p=…')` gives host '' and pathname
+ * '//join', `new URL('quiet-loki://?p=…')` gives host '' and pathname '//'. Query, hash and searchParams are unchanged.
+ * Special schemes (https, …) are not affected.
+ *
+ * @returns a function restoring the original `URL`
+ */
+export const installChromiumLikeCustomSchemeUrl = (): (() => void) => {
+  const RealURL = globalThis.URL
+  const isSpecial = (protocol: string) => ['http:', 'https:', 'ws:', 'wss:', 'ftp:', 'file:'].includes(protocol)
+  class ChromiumLikeURL extends RealURL {
+    get host(): string {
+      return isSpecial(this.protocol) ? super.host : ''
+    }
+
+    get hostname(): string {
+      return isSpecial(this.protocol) ? super.hostname : ''
+    }
+
+    get pathname(): string {
+      if (isSpecial(this.protocol)) return super.pathname
+      const path = super.pathname === '/' ? '' : super.pathname
+      return `//${super.host}${path}`
+    }
+  }
+  globalThis.URL = ChromiumLikeURL as typeof URL
+  return () => {
+    globalThis.URL = RealURL
+  }
+}

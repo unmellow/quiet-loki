@@ -7,6 +7,8 @@ import {
   peerPairsToUrlParamString,
   PSK_PARAM_KEY,
   QUIET_JOIN_PAGE,
+  Site,
+  installChromiumLikeCustomSchemeUrl,
   validInvitationDatav4,
   VERSION_KEY,
 } from '@quiet/common'
@@ -133,6 +135,44 @@ describe('Invitation link helper', () => {
       expect(() => getInvitationLinks(`quiet://join#${code()}`)).toThrow()
       expect(() => getInvitationLinks(`quiet-loki:///share?${code()}`)).toThrow()
       expect(() => getInvitationLinks(`quiet-loki://other#${code()}`)).toThrow()
+    })
+  })
+
+  describe.each([
+    ['Node/whatwg URL', () => () => undefined],
+    ['Chromium-like URL (renderer: host "", pathname "//join" / "//")', installChromiumLikeCustomSchemeUrl],
+  ])('every accepted form, with %s', (_name, install) => {
+    let restore: () => void
+    beforeEach(() => {
+      restore = install()
+    })
+    afterEach(() => restore())
+
+    const code = () => {
+      const url = new URL(QUIET_JOIN_PAGE)
+      urlParams.forEach(([key, value]) => url.searchParams.append(key, value))
+      return url.search.substring(1)
+    }
+
+    it.each([
+      ['quiet-loki://join#<code>', (c: string) => `quiet-loki://join#${c}`],
+      ['quiet-loki://join/#<code>', (c: string) => `quiet-loki://join/#${c}`],
+      ['quiet-loki://?<code>', (c: string) => `quiet-loki://?${c}`],
+      ['bare code', (c: string) => c],
+      ['https://<Site.DOMAIN>/join#<code>', (c: string) => `https://${Site.DOMAIN}/${Site.JOIN_PAGE}#${c}`],
+      ['quiet-loki://join#<code> with surrounding whitespace', (c: string) => ` \n quiet-loki://join#${c} \t`],
+    ])('accepts %s', (_label, make) => {
+      expect(getInvitationLinks(make(code()))).toEqual(data)
+    })
+
+    it.each([
+      ['quiet-loki:///share?<code>', (c: string) => `quiet-loki:///share?${c}`],
+      ['quiet-loki://other#<code>', (c: string) => `quiet-loki://other#${c}`],
+      ['quiet://join#<code>', (c: string) => `quiet://join#${c}`],
+      ['https://otherwebsite.com/join#<code>', (c: string) => `https://otherwebsite.com/${Site.JOIN_PAGE}#${c}`],
+      ['quiet-loki://join#', () => 'quiet-loki://join#'],
+    ])('rejects %s', (_label, make) => {
+      expect(() => getInvitationLinks(make(code()))).toThrow()
     })
   })
 })

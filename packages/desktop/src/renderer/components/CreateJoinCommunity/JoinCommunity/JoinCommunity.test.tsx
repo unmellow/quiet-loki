@@ -23,6 +23,7 @@ import {
   getValidInvitationUrlTestData,
   PSK_PARAM_KEY,
   validInvitationDatav4,
+  installChromiumLikeCustomSchemeUrl,
 } from '@quiet/common'
 import { createLogger } from '../../../logger'
 
@@ -177,6 +178,46 @@ describe('join community', () => {
       await waitFor(() => expect(handleCommunityAction).toBeCalledWith(data))
     }
   )
+
+  describe('pasting the full quiet-loki:// link with the renderer (Chromium) URL semantics', () => {
+    // jsdom's URL follows whatwg-url like Node (host 'join'); the real renderer gives host '' and pathname '//join'.
+    let restoreUrl: () => void
+    beforeEach(() => {
+      restoreUrl = installChromiumLikeCustomSchemeUrl()
+    })
+    afterEach(() => restoreUrl())
+
+    it.each([[`quiet-loki://join#${validCode}`], [`quiet-loki://join/#${validCode}`], [`quiet-loki://?${validCode}`]])(
+      'joins with %s',
+      async (link: string) => {
+        expect(new URL('quiet-loki://join#x').pathname).toEqual('//join') // stub active
+        const { store } = await prepareStore()
+        const handleCommunityAction = jest.fn()
+
+        const result = renderComponent(
+          <PerformCommunityActionComponent
+            open={true}
+            handleClose={() => {}}
+            communityOwnership={CommunityOwnership.User}
+            handleCommunityAction={handleCommunityAction}
+            handleRedirection={() => {}}
+            isConnectionReady={true}
+            isCloseDisabled={true}
+            hasReceivedResponse={false}
+          />,
+          store
+        )
+
+        const textInput = result.getByPlaceholderText(inviteLinkField().fieldProps.placeholder!)
+        await userEvent.click(textInput)
+        await userEvent.paste(link)
+        await userEvent.click(result.getByText('Continue'))
+
+        await waitFor(() => expect(handleCommunityAction).toBeCalledWith(data))
+        expect(result.queryByText(InviteLinkErrors.InvalidCode)).toBeNull()
+      }
+    )
+  })
 
   it('trims whitespaces from registrar url', async () => {
     const { store } = await prepareStore()

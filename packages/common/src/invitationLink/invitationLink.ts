@@ -5,7 +5,7 @@ import {
   type InvitationDataV4,
   type InvitationDataV5,
 } from '@quiet/types'
-import { QUIET_JOIN_PAGE } from '../const'
+import { QUIET_JOIN_PAGE, Site } from '../const'
 import {
   AUTH_DATA_KEY,
   DEEP_URL_SCHEME,
@@ -116,6 +116,25 @@ const parseDeepUrl = ({ url, expectedProtocol = `${DEEP_URL_SCHEME}:` }: ParseDe
 }
 
 /**
+ * `quiet-loki://join#`, `quiet-loki://join/#`, `quiet-loki://join?`, `quiet-loki://?`, `quiet-loki://#` (any case).
+ *
+ * Matched textually on purpose: WHATWG URL parsing of non-special schemes differs between Node and Chromium. Node gives
+ * `quiet-loki://join#…` host 'join' / pathname '', the Electron 32 (Chromium 128) renderer gives host '' / pathname
+ * '//join' (and pathname '//' for `quiet-loki://?…`), so host/pathname checks only worked in unit tests (r6670).
+ */
+const QUIET_LOKI_LINK_PREFIX = new RegExp(`^${DEEP_URL_SCHEME}://(?:${Site.JOIN_PAGE})?/?[#?]`, 'i')
+
+/**
+ * If `link` is a Quiet Loki invite link (share or deep form), return the code part after the prefix (`p=…&k=…&v=v4`),
+ * otherwise null. Does not validate the code.
+ */
+export const stripQuietLokiLinkPrefix = (link: string): string | null => {
+  const trimmed = link.trim()
+  const match = trimmed.match(QUIET_LOKI_LINK_PREFIX)
+  return match ? trimmed.slice(match[0].length) : null
+}
+
+/**
  * Extract invitation data from deep url.
  * Valid format: quiet://?<peerid1>=<address1>&<peerid2>=<addresss2>&k=<psk>
  *
@@ -124,7 +143,14 @@ const parseDeepUrl = ({ url, expectedProtocol = `${DEEP_URL_SCHEME}:` }: ParseDe
  * @returns {InvitationData} Parsed parameters
  */
 export const parseInvitationLinkDeepUrl = (url: string): InvitationData => {
-  return parseDeepUrl({ url })
+  // Strip the scheme prefix textually (see QUIET_LOKI_LINK_PREFIX) so the share form `quiet-loki://join#…` works too,
+  // in Node and in the renderer alike; the code is then parsed the same way as a pasted bare code.
+  const code = stripQuietLokiLinkPrefix(url)
+  if (code === null) {
+    logger.error(`Could not retrieve invitation data from deep url '${url}'`)
+    throw new Error(`Invalid url`)
+  }
+  return parseDeepUrl({ url: code, expectedProtocol: '' })
 }
 
 /**
@@ -175,7 +201,8 @@ export const p2pAddressesToPairs = (addresses: string[]): InvitationPair[] => {
     if (portMatch) {
       wsPort = Number(portMatch[1])
     }
-    const rawAddress = onionAddress.endsWith('.loki') || onionAddress.endsWith('.onion') ? onionAddress.split('.')[0] : onionAddress
+    const rawAddress =
+      onionAddress.endsWith('.loki') || onionAddress.endsWith('.onion') ? onionAddress.split('.')[0] : onionAddress
     if (!validatePeerData({ peerId, onionAddress: rawAddress })) continue
 
     const pair: InvitationPair = { peerId: peerId, onionAddress: rawAddress }
