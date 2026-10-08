@@ -3,7 +3,7 @@ import { currentCommunityId } from '../communities/communities.selectors'
 import { StoreKeys } from '../store.keys'
 import { type CreatedSelectors, type StoreState } from '../store.types'
 import { errorsAdapter } from './errors.adapter'
-import { type ErrorPayload } from '@quiet/types'
+import { type ErrorPayload, SocketActions } from '@quiet/types'
 
 const errorSlice: CreatedSelectors[StoreKeys.Errors] = (state: StoreState) => state[StoreKeys.Errors]
 
@@ -38,7 +38,17 @@ export const currentCommunityErrors = createSelector(currentCommunityId, selectA
   }, {})
 })
 
+/**
+ * The error of the last failed community launch (create/join/launch from storage), if any. Only one community can be
+ * active at a time, so it is looked up by type, not by community id. Includes actionable messages such as the libp2p
+ * "Cannot bind libp2p WebSocket on host:port" error. Cleared when a community launches successfully.
+ */
+export const launchCommunityError = createSelector(selectAll, errors => {
+  return errors?.find(error => error.type === SocketActions.LAUNCH_COMMUNITY) ?? null
+})
+
 export const errorsSelectors = {
+  launchCommunityError,
   generalErrors,
   generalErrorByType,
   currentCommunityErrors,

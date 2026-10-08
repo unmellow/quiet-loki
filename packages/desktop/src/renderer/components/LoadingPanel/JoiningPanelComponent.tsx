@@ -2,7 +2,7 @@ import React from 'react'
 import { styled } from '@mui/material/styles'
 import Modal from '../ui/Modal/Modal'
 import JoinCommunityImg from '../../static/images/join-community.png'
-import { Grid, Typography } from '@mui/material'
+import { Button, Grid, Typography } from '@mui/material'
 import { ConnectionProcessInfo } from '@quiet/types'
 import classNames from 'classnames'
 import { createLogger } from '../../logger'
@@ -105,6 +105,10 @@ export interface JoiningPanelComponentProps {
   openUrl: (url: string) => void
   connectionInfo: { number: number; text: ConnectionProcessInfo }
   isOwner: boolean
+  /** Set when the community could not be launched (e.g. the libp2p WebSocket port is taken): replaces the spinner. */
+  error?: string
+  /** Dismisses the error (clears it and closes the panel). */
+  onDismissError?: () => void
 }
 
 const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
@@ -112,8 +116,41 @@ const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
   handleClose,
   connectionInfo,
   isOwner,
+  error,
+  onDismissError,
 }) => {
-  logger.info('Generating JoiningPanelComponent with props:', { open, connectionInfo, isOwner })
+  logger.info('Generating JoiningPanelComponent with props:', { open, connectionInfo, isOwner, error })
+  if (error) {
+    return (
+      <Modal open={open} handleClose={onDismissError ?? handleClose} withoutHeader>
+        <StyledGrid container justifyContent='center' alignItems='center' className={classes.root}>
+          <Grid
+            container
+            alignItems='center'
+            direction='column'
+            className={classes.contentWrapper}
+            data-testid='joiningPanelErrorComponent'
+          >
+            <img className={classes.image} src={JoinCommunityImg} />
+            <Typography className={classes.heading2} variant='h2'>
+              {isOwner ? 'Could not create your community' : 'Could not join the community'}
+            </Typography>
+            <Typography variant='body2' className={classes.text} data-testid='joiningPanelError' sx={{ marginTop: 2 }}>
+              {error}
+            </Typography>
+            <Button
+              variant='contained'
+              data-testid='joiningPanelErrorClose'
+              sx={{ marginTop: 3 }}
+              onClick={onDismissError ?? handleClose}
+            >
+              Close
+            </Button>
+          </Grid>
+        </StyledGrid>
+      </Modal>
+    )
+  }
   return (
     <Modal open={open} handleClose={handleClose} isCloseDisabled={true} withoutHeader>
       <StyledGrid

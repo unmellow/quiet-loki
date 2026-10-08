@@ -34,6 +34,7 @@ import {
   type CachedUserProfileRequest,
   type CachedUserProfileResponse,
   type UsersUpdatedEvent,
+  SocketActions,
   SocketEvents,
   LaunchCommunityPayload,
   HCaptchaChallengeRequest,
@@ -70,6 +71,7 @@ export function subscribe(socket: Socket) {
     | ReturnType<typeof publicChannelsActions.setChannelPermissions>
     | ReturnType<typeof errorsActions.addError>
     | ReturnType<typeof errorsActions.handleError>
+    | ReturnType<typeof errorsActions.clearError>
     | ReturnType<typeof identityActions.updateIdentity>
     | ReturnType<typeof identityActions.addNewIdentity>
     | ReturnType<typeof communitiesActions.createCommunity>
@@ -108,6 +110,8 @@ export function subscribe(socket: Socket) {
       logger.info(`${SocketEvents.COMMUNITY_LAUNCHED}`, payload)
       emit(communitiesActions.setCurrentCommunity(payload.id))
       emit(networkActions.addInitializedCommunity(payload.id))
+      // A successful launch supersedes an earlier failed one (e.g. the bind error after the port was freed)
+      emit(errorsActions.clearError({ type: SocketActions.LAUNCH_COMMUNITY }))
     })
     socket.on(SocketEvents.COMMUNITY_UPDATED, (payload: UpdateCommunityPayload) => {
       logger.info(`${SocketEvents.COMMUNITY_UPDATED}`, payload)

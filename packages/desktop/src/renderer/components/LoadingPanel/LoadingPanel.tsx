@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useModal } from '../../containers/hooks'
 import { ModalName } from '../../sagas/modals/modals.types'
 import { socketSelectors } from '../../sagas/socket/socket.selectors'
-import { communities, publicChannels, users, connection, network } from '@quiet/state-manager'
+import { communities, publicChannels, users, connection, network, errors } from '@quiet/state-manager'
 import { modalsActions } from '../../sagas/modals/modals.slice'
 import { shell } from 'electron'
 import JoiningPanelComponent from './JoiningPanelComponent'
@@ -30,6 +30,21 @@ const LoadingPanel = () => {
   const areMessages = useSelector(publicChannels.selectors.areMessagesLoaded)
   const areChannels = useSelector(publicChannels.selectors.areChannelsLoaded)
   const isCurrentCommunityInitialized = useSelector(network.selectors.isCurrentCommunityInitialized)
+  const launchError = useSelector(errors.selectors.launchCommunityError)
+
+  // The backend could not launch the community (e.g. "Cannot bind libp2p WebSocket on host:port"): show the reason
+  // instead of leaving the user on the endless "Joining now!" spinner.
+  useEffect(() => {
+    if (launchError && !loadingPanelModal.open) {
+      logger.warn('Community launch failed, showing error', launchError.message)
+      loadingPanelModal.handleOpen()
+    }
+  }, [launchError])
+
+  const dismissLaunchError = useCallback(() => {
+    if (launchError) dispatch(errors.actions.clearError(launchError))
+    loadingPanelModal.handleClose()
+  }, [launchError])
 
   useEffect(() => {
     if (message === LoadingPanelType.Failed) {
@@ -67,18 +82,18 @@ const LoadingPanel = () => {
   }, [isConnected, currentCommunity, isChannelReplicated])
 
   useEffect(() => {
-    if (isConnected && message === LoadingPanelType.StartingApplication) {
+    if (isConnected && message === LoadingPanelType.StartingApplication && !launchError) {
       logger.info('Application started, closing loading panel')
       loadingPanelModal.handleClose()
     }
-  }, [isConnected, message])
+  }, [isConnected, message, launchError])
 
   const openUrl = useCallback((url: string) => {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     shell.openExternal(url)
   }, [])
 
-  if (message === LoadingPanelType.StartingApplication) {
+  if (message === LoadingPanelType.StartingApplication && !launchError) {
     logger.info('Starting application')
     return <StartingPanelComponent {...loadingPanelModal} />
   } else {
@@ -90,6 +105,8 @@ const LoadingPanel = () => {
           openUrl={openUrl}
           connectionInfo={connectionProcessSelector}
           isOwner={owner}
+          error={launchError?.message}
+          onDismissError={dismissLaunchError}
         />
       )
     } catch (e) {
