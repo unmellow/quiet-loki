@@ -1,6 +1,7 @@
 import { setupCrypto } from '@quiet/identity'
 import { getBaseTypesFactory, getReduxStoreFactory } from '../../utils/tests/factories'
 import { prepareStore } from '../../utils/tests/prepareStore'
+import { createPeerIdTestHelper } from '../../utils/tests/helpers'
 import { connectionSelectors } from './connection.selectors'
 import { communitiesActions } from '../communities/communities.slice'
 import { connectionActions } from './connection.slice'
@@ -470,5 +471,82 @@ describe('communitiesSelectors', () => {
     expect(networkSelectors.isCurrentCommunityInitialized(store.getState())).toBe(true)
     expect(publicChannelsSelectors.areMessagesLoaded(store.getState())).toBe(true)
     expect(publicChannelsSelectors.areChannelsLoaded(store.getState())).toBe(true)
+  })
+
+  describe('own address in the peer list / invite', () => {
+    const OLD_ADDRESS = '5uq8kk8imfu19qw7ihqbseupuztaf9i8p1z9e8a6dagxn3tb4u5y'
+    const NEW_ADDRESS = 'd1fh1gsd1qhusqhaatsqfphzmsop5qmqhmfgu3uimn99cg9eiycy'
+    const OTHER_ADDRESS = 'odgz5hjgorj3kbhjdpi3u9xdmjzdxxp4qqpfjtzuxzcukdasnrcy'
+    const OTHER_PEER = '12D3KooWK3zJQHLydrBb6HfmrGBpaBojafh6x4PpVahGgiq7VCKv'
+
+    const setup = async (identityAddress: string, ownProfileAddress?: string) => {
+      const store = prepareStore().store
+      const factory = await getReduxStoreFactory(store)
+      await factory.create('Community', { psk: '12345', ownerOrbitDbIdentity: 'owner' })
+      const communityId = communitiesSelectors.currentCommunity(store.getState())!.id
+      const identity = await factory.create<ReturnType<typeof identityActions.addNewIdentity>['payload']>('Identity', {
+        communityId,
+        networkInfo: {
+          hiddenService: { onionAddress: identityAddress, privateKey: 'unused' },
+          peerId: createPeerIdTestHelper(),
+        },
+      })
+      const ownPeerId = identity.networkInfo.peerId.id
+      const profiles = [{ userId: OTHER_PEER, userData: { peerId: OTHER_PEER, onionAddress: OTHER_ADDRESS } }]
+      if (ownProfileAddress) {
+        profiles.push({ userId: ownPeerId, userData: { peerId: ownPeerId, onionAddress: ownProfileAddress } })
+      }
+      store.dispatch(usersActions.setUserProfiles(profiles as UserProfile[]))
+      store.dispatch(
+        connectionActions.setLongLivedInvite({
+          seed: '5ah8uYodiwuwVybT',
+          salt: '5ah8uYodiwuwVybT',
+          id: '5ah8uYodiwuwVybT' as Base58,
+          teamId: INVITE_TEAM_ID,
+        })
+      )
+      return { store, ownPeerId }
+    }
+
+    // the `p=` param of the share link: <peerId>,<address>,<port>;<peerId>,<address>,<port>
+    const addressesIn = (url: string) =>
+      new URLSearchParams(url.split('#')[1])
+        .get('p')!
+        .split(';')
+        .map(pair => {
+          const [peerId, address] = pair.split(',')
+          return `${peerId}@${address}`
+        })
+
+    it('uses the refreshed profile address, not the stale renderer identity address, for our own peer', async () => {
+      const { store, ownPeerId } = await setup(OLD_ADDRESS, NEW_ADDRESS)
+
+      const list = connectionSelectors.peerList(store.getState())
+      expect(list[0]).toEqual(createLibp2pAddress(NEW_ADDRESS, ownPeerId))
+      expect(list.join('\n')).not.toContain(OLD_ADDRESS)
+      expect(list).toContain(createLibp2pAddress(OTHER_ADDRESS, OTHER_PEER))
+      expect(list).toHaveLength(2)
+
+      const invited = addressesIn(connectionSelectors.invitationUrl(store.getState()))
+      expect(invited[0]).toEqual(`${ownPeerId}@${NEW_ADDRESS}`)
+      expect(invited.join(',')).not.toContain(OLD_ADDRESS)
+      expect(invited).toHaveLength(2)
+    })
+
+    it('still lists the local identity address first when there is no profile for our peer yet', async () => {
+      const { store, ownPeerId } = await setup(NEW_ADDRESS)
+
+      const list = connectionSelectors.peerList(store.getState())
+      expect(list[0]).toEqual(createLibp2pAddress(NEW_ADDRESS, ownPeerId))
+      expect(list).toHaveLength(2)
+    })
+
+    it('does not duplicate our own address when identity and profile agree', async () => {
+      const { store, ownPeerId } = await setup(NEW_ADDRESS, NEW_ADDRESS)
+
+      const list = connectionSelectors.peerList(store.getState())
+      expect(list.filter(a => a.endsWith(ownPeerId))).toEqual([createLibp2pAddress(NEW_ADDRESS, ownPeerId)])
+      expect(addressesIn(connectionSelectors.invitationUrl(store.getState()))).toHaveLength(2)
+    })
   })
 })
