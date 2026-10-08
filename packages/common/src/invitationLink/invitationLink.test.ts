@@ -4,6 +4,7 @@ import {
   composeInvitationDeepUrl,
   composeInvitationShareUrl,
   parseInvitationLinkDeepUrl,
+  stripQuietLokiLinkPrefix,
   p2pAddressesToPairs,
   pairsToP2pAddresses,
   peerPairsToUrlParamString,
@@ -19,7 +20,7 @@ import {
   VERSION_KEY,
 } from './invitationLink.const'
 import { QUIET_JOIN_PAGE } from '../const'
-import { validInvitationDatav4, validInvitationDatav5 } from '../tests'
+import { installChromiumLikeCustomSchemeUrl, validInvitationDatav4, validInvitationDatav5 } from '../tests'
 import { createLibp2pAddress } from '../libp2p'
 import { LOKINET_WS_PORT } from '../overlay'
 import { encodeAuthData, encodeQssEndpoint } from './invitationLink.validator'
@@ -100,7 +101,12 @@ describe(`Invitation link helper ${InvitationDataVersion.v4}`, () => {
   ]
 
   it('retrieves invitation link from argv', () => {
-    const result = argvInvitationLink(['something', 'quiet-loki:/invalid', 'zbay://invalid', composeInvitationDeepUrl(data)])
+    const result = argvInvitationLink([
+      'something',
+      'quiet-loki:/invalid',
+      'zbay://invalid',
+      composeInvitationDeepUrl(data),
+    ])
     logger.info('result', result)
     expect(result).toEqual(data)
   })
@@ -408,7 +414,12 @@ describe(`Invitation link helper ${InvitationDataVersion.v5}`, () => {
   ]
 
   it('retrieves invitation link from argv', () => {
-    const result = argvInvitationLink(['something', 'quiet-loki:/invalid', 'zbay://invalid', composeInvitationDeepUrl(data)])
+    const result = argvInvitationLink([
+      'something',
+      'quiet-loki:/invalid',
+      'zbay://invalid',
+      composeInvitationDeepUrl(data),
+    ])
     expect(result).toEqual(data)
   })
 
@@ -831,5 +842,67 @@ describe(`Invitation link helper ${InvitationDataVersion.v5}`, () => {
     expect(parsed).toEqual({
       ...data,
     })
+  })
+})
+
+describe('quiet-loki:// prefix handling (independent of URL host/pathname parsing)', () => {
+  const data: InvitationDataV4 = validInvitationDatav4[0]
+  const code = () => composeInvitationDeepUrl(data).split('://?')[1]
+
+  it.each([
+    ['quiet-loki://join#', true],
+    ['quiet-loki://join/#', true],
+    ['quiet-loki://join?', true],
+    ['quiet-loki://?', true],
+    ['quiet-loki://#', true],
+    ['QUIET-LOKI://JOIN#', true],
+    ['quiet-loki:///share?', false],
+    ['quiet-loki://other#', false],
+    ['quiet://join#', false],
+    ['https://quiet-loki/join#', false],
+    ['', false],
+  ])('stripQuietLokiLinkPrefix(%s<code>) recognised: %s', (prefix, recognised) => {
+    const result = stripQuietLokiLinkPrefix(`  ${prefix}${code()}  `)
+    expect(result).toEqual(recognised ? code() : null)
+  })
+
+  describe.each([
+    ['Node/whatwg URL', () => () => undefined],
+    ['Chromium-like URL (host "", pathname "//join")', installChromiumLikeCustomSchemeUrl],
+  ])('with %s', (_name, install) => {
+    let restore: () => void
+    beforeEach(() => {
+      restore = install()
+    })
+    afterEach(() => restore())
+
+    it.each(['quiet-loki://join#', 'quiet-loki://join/#', 'quiet-loki://?'])(
+      'parseInvitationLinkDeepUrl accepts %s<code>',
+      prefix => {
+        expect(parseInvitationLinkDeepUrl(`${prefix}${code()}`)).toEqual(data)
+      }
+    )
+
+    it('argvInvitationLink accepts the share link from the OS (quiet-loki://join#…)', () => {
+      expect(argvInvitationLink(['/usr/bin/quiet-loki', `quiet-loki://join#${code()}`])).toEqual(data)
+    })
+
+    it('parseInvitationLinkDeepUrl still rejects other schemes/hosts', () => {
+      expect(() => parseInvitationLinkDeepUrl(`quiet://?${code()}`)).toThrow()
+      expect(() => parseInvitationLinkDeepUrl(`quiet-loki://other#${code()}`)).toThrow()
+    })
+  })
+
+  it('the Chromium-like URL stub really has the renderer shape', () => {
+    const restore = installChromiumLikeCustomSchemeUrl()
+    try {
+      const share = new URL('quiet-loki://join#p=1')
+      expect([share.host, share.pathname, share.hash]).toEqual(['', '//join', '#p=1'])
+      const deep = new URL('quiet-loki://?p=1&v=v4')
+      expect([deep.host, deep.pathname, deep.searchParams.get('v')]).toEqual(['', '//', 'v4'])
+      expect(new URL('https://example.org/join#x').host).toEqual('example.org')
+    } finally {
+      restore()
+    }
   })
 })

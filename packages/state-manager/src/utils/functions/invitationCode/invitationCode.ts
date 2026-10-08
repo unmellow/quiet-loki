@@ -1,4 +1,4 @@
-import { DEEP_URL_SCHEME, Site, parseInvitationLink } from '@quiet/common'
+import { DEEP_URL_SCHEME, Site, parseInvitationLink, stripQuietLokiLinkPrefix } from '@quiet/common'
 import { type InvitationData } from '@quiet/types'
 
 export const getInvitationLinks = (codeOrUrl: string): InvitationData => {
@@ -8,11 +8,20 @@ export const getInvitationLinks = (codeOrUrl: string): InvitationData => {
    *
    * Accepted forms:
    *  - bare code:                    p=<pairs>&k=<psk>&a=<auth>&v=v4
-   *  - Quiet Loki share link:        quiet-loki://join#p=...   (what Settings -> Add Members shows)
+   *  - Quiet Loki share link:        quiet-loki://join#p=...   (what Settings -> Add Members shows), also join/#
    *  - Quiet Loki deep link:         quiet-loki://?p=...
    *  - legacy https share link:      https://<Site.DOMAIN>/join#p=...
+   *
+   * quiet-loki:// links are recognised textually, not via URL host/pathname: Chromium (the renderer) and Node parse
+   * non-special schemes differently (see stripQuietLokiLinkPrefix).
    */
   codeOrUrl = codeOrUrl.trim()
+
+  const quietLokiCode = stripQuietLokiLinkPrefix(codeOrUrl)
+  if (quietLokiCode !== null) {
+    return parseInvitationLink(quietLokiCode)
+  }
+
   let potentialLink
   let validUrl: URL | null = null
 
@@ -25,16 +34,12 @@ export const getInvitationLinks = (codeOrUrl: string): InvitationData => {
     potentialLink = codeOrUrl
   }
 
-  if (validUrl && validUrl.protocol === `${DEEP_URL_SCHEME}:`) {
-    const noPath = validUrl.pathname === '' || validUrl.pathname === '/'
-    if (validUrl.host === Site.JOIN_PAGE && noPath) {
-      // quiet-loki://join#<code> (share link)
-      inviteLink = validUrl.hash.substring(1)
-    } else if (validUrl.host === '' && noPath) {
-      // quiet-loki://?<code> (deep link)
-      inviteLink = validUrl.search.substring(1)
-    }
-  } else if (validUrl && validUrl.host === Site.DOMAIN && validUrl.pathname.includes(Site.JOIN_PAGE)) {
+  if (
+    validUrl &&
+    validUrl.protocol !== `${DEEP_URL_SCHEME}:` &&
+    validUrl.host === Site.DOMAIN &&
+    validUrl.pathname.includes(Site.JOIN_PAGE)
+  ) {
     const hash = validUrl.hash
     if (hash) {
       // Parse hash
