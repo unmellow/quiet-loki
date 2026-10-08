@@ -141,11 +141,7 @@ export const validatePeerData = ({ peerId, onionAddress }: { peerId: string; oni
     logger.warn('SNApp address in invitation link is empty')
     return false
   }
-  const bare = addr.endsWith('.loki')
-    ? addr.slice(0, -5)
-    : addr.endsWith('.onion')
-      ? addr.slice(0, -6)
-      : addr
+  const bare = addr.endsWith('.loki') ? addr.slice(0, -5) : addr.endsWith('.onion') ? addr.slice(0, -6) : addr
   if (bare.match(ONION_ADDRESS_REGEX) || addr.endsWith('.onion')) {
     logger.warn(`Onion address ${onionAddress} is not valid for Quiet Loki (need 52-char SNApp)`)
     return false
