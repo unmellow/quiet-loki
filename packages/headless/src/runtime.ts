@@ -1,3 +1,4 @@
+import { formatStatus } from './status'
 import { fork, type ChildProcess } from 'child_process'
 import fs from 'fs'
 import crypto from 'crypto'
@@ -476,9 +477,9 @@ export async function cmdMessages(rt: Runtime, ids: string[] = []): Promise<void
   console.log(JSON.stringify(res?.messages || [], null, 2))
 }
 
-export async function cmdStatus(rt: Runtime): Promise<void> {
+export async function cmdStatus(rt: Runtime, opts: { showSecrets?: boolean } = {}): Promise<void> {
   console.log(
-    JSON.stringify(
+    formatStatus(
       {
         dataDir: rt.dataDir,
         port: rt.port,
@@ -486,8 +487,7 @@ export async function cmdStatus(rt: Runtime): Promise<void> {
         lokinetWsPort: process.env.LOKINET_WS_PORT || '80',
         session: rt.session,
       },
-      null,
-      2
+      opts
     )
   )
 }

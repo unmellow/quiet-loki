@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 3
+    },
+    "auditLog": "Quiet9/logs/.0cc50050fef51770ef104ced8ba6402db152ade1-audit.json",
+    "files": [
+        {
+            "date": 1791707102079,
+            "name": "Quiet9/logs/log_2026-10-11.log",
+            "hash": "4d5b53101fa130d80e3c35f19333481344e0c947e49d2a348422cc874e7b1036"
+        }
+    ],
+    "hashType": "sha256"
+}

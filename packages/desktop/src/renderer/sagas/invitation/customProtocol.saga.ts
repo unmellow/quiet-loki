@@ -1,3 +1,4 @@
+import { redactInviteUrlForLog, redactSecretsForLog } from '@quiet/common'
 import { PayloadAction } from '@reduxjs/toolkit'
 import { select, put, delay } from 'typed-redux-saga'
 import { InvitationData, InvitationDataVersion, JoinCommunityPayload } from '@quiet/types'
@@ -19,7 +20,7 @@ export function* customProtocolSaga(
   action: PayloadAction<ReturnType<typeof communities.actions.customProtocol>['payload']>
 ): Generator {
   const code = action.payload
-  logger.info('Custom protocol', code)
+  logger.info('Custom protocol', redactInviteUrlForLog(code))
   logger.info('Waiting for websocket connection before proceeding with deep link flow.')
 
   while (true) {
@@ -47,12 +48,12 @@ export function* customProtocolSaga(
         },
       })
     )
-    logger.warn(`Failed processing ${code}`)
+    logger.warn(`Failed processing ${redactInviteUrlForLog(code)}`)
     return
   }
 
   if (data === null) {
-    logger.warn(`Failed (Returned null) ${code}`)
+    logger.warn(`Failed (Returned null) ${redactInviteUrlForLog(code)}`)
     return
   }
 
@@ -89,7 +90,7 @@ export function* customProtocolSaga(
     inviteData: data,
   }
 
-  logger.info('Dispatching join community action', payload)
+  logger.info('Dispatching join community action', redactSecretsForLog(payload))
   yield* put(communities.actions.joinCommunity(payload))
   yield* put(modalsActions.openModal({ name: ModalName.createUsernameModal }))
 }

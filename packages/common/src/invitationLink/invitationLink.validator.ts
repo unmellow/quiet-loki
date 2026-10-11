@@ -443,7 +443,7 @@ const validateInvitationSeed: InvitationLinkUrlNamedParamValidatorFun<Invitation
   value: string
 ): Partial<InvitationAuthData> => {
   if (value.match(INVITATION_SEED_REGEX) == null) {
-    logger.warn(`Invitation seed ${value} is not a valid LFA seed`)
+    logger.warn(`Invitation seed is not a valid LFA seed`)
     throw new UrlParamValidatorError(`${AUTH_DATA_KEY}.${INVITATION_SEED_KEY}`, value)
   }
   return {
@@ -539,7 +539,7 @@ const validateSalt: InvitationLinkUrlNamedParamValidatorFun<InvitationAuthData> 
   value: string
 ): Partial<InvitationAuthData> => {
   if (value.match(SALT_REGEX) == null) {
-    logger.warn(`Salt ${value} is not valid`)
+    logger.warn(`Salt is not valid`)
     throw new UrlParamValidatorError(`${AUTH_DATA_KEY}.${SALT_KEY}`, value)
   }
   return {

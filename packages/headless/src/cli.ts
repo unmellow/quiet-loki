@@ -1,18 +1,12 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import {
-  cmdCreate,
-  cmdInvite,
-  cmdJoin,
-  cmdMessages,
-  cmdSend,
-  cmdStatus,
-  startRuntime,
-  stopRuntime,
-} from './runtime'
+import { cmdCreate, cmdInvite, cmdJoin, cmdMessages, cmdSend, cmdStatus, startRuntime, stopRuntime } from './runtime'
 import { installServeSignalHandlers } from './shutdown'
 
-async function withRuntime(dataDir: string | undefined, fn: (rt: Awaited<ReturnType<typeof startRuntime>>) => Promise<void>) {
+async function withRuntime(
+  dataDir: string | undefined,
+  fn: (rt: Awaited<ReturnType<typeof startRuntime>>) => Promise<void>
+) {
   const rt = await startRuntime({ dataDir })
   try {
     await fn(rt)
@@ -35,11 +29,9 @@ program
     await withRuntime(program.opts().dataDir, rt => cmdCreate(rt, opts.name, opts.username))
   })
 
-program
-  .command('invite')
-  .action(async () => {
-    await withRuntime(program.opts().dataDir, rt => cmdInvite(rt))
-  })
+program.command('invite').action(async () => {
+  await withRuntime(program.opts().dataDir, rt => cmdInvite(rt))
+})
 
 program
   .command('join')
@@ -66,8 +58,10 @@ program
 
 program
   .command('status')
-  .action(async () => {
-    await withRuntime(program.opts().dataDir, rt => cmdStatus(rt))
+  .description('Print runtime and session info as JSON (psk, invite seed and salt are masked as "[redacted]")')
+  .option('--show-secrets', 'print the psk, invite seed and invite salt unmasked')
+  .action(async opts => {
+    await withRuntime(program.opts().dataDir, rt => cmdStatus(rt, { showSecrets: Boolean(opts.showSecrets) }))
   })
 
 program

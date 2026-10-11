@@ -1,3 +1,4 @@
+import { redactInviteUrlForLog } from '@quiet/common'
 import './loadMainEnvs' // Needs to be at the top of imports
 import { app, BrowserWindow, BrowserView, Menu, ipcMain, session, dialog } from 'electron'
 import fs from 'fs'
@@ -179,7 +180,7 @@ const requestStateSaveOrQuit = () => {
 
 app.on('open-url', (event, url) => {
   // MacOS only
-  logger.info('Event app.open-url', url)
+  logger.info('Event app.open-url', redactInviteUrlForLog(url))
   invitationUrl = url // If user opens invitation link with closed app open-url fires too early - before mainWindow is initialized
   event.preventDefault()
   if (mainWindow) {
