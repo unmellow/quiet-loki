@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ipcRenderer } from 'electron'
 import Root, { persistor } from './Root'
 import store from './store'
-import { clearCommunityWithDependencies } from './clearCommunity'
+import { clearCommunityWithDependencies, registerClearCommunity } from './clearCommunity'
 import updateHandlers from './store/handlers/update'
 import { socketActions } from './sagas/socket/socket.slice'
 import { communities, captcha } from '@quiet/state-manager'
@@ -74,6 +74,7 @@ export const clearCommunity = async () => {
     },
   })
 }
+registerClearCommunity(clearCommunity)
 
 if (module.hot) {
   module.hot.accept()
