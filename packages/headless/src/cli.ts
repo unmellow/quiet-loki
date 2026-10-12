@@ -66,8 +66,10 @@ program
 
 program
   .command('status')
-  .action(async () => {
-    await withRuntime(program.opts().dataDir, rt => cmdStatus(rt))
+  .description('Print runtime and session info as JSON (psk, invite seed and salt are masked as "[redacted]")')
+  .option('--show-secrets', 'print the psk, invite seed and invite salt unmasked')
+  .action(async opts => {
+    await withRuntime(program.opts().dataDir, rt => cmdStatus(rt, { showSecrets: Boolean(opts.showSecrets) }))
   })
 
 program

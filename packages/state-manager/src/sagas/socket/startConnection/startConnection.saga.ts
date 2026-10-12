@@ -1,3 +1,4 @@
+import { redactSecretsForLog } from '@quiet/common'
 import { eventChannel } from 'redux-saga'
 import { type Socket } from '../../../types'
 import { all, call, fork, put, takeEvery, cancelled } from 'typed-redux-saga'
@@ -114,7 +115,7 @@ export function subscribe(socket: Socket) {
       emit(errorsActions.clearError({ type: SocketActions.LAUNCH_COMMUNITY }))
     })
     socket.on(SocketEvents.COMMUNITY_UPDATED, (payload: UpdateCommunityPayload) => {
-      logger.info(`${SocketEvents.COMMUNITY_UPDATED}`, payload)
+      logger.info(`${SocketEvents.COMMUNITY_UPDATED}`, redactSecretsForLog(payload))
       emit(communitiesActions.updateCommunityData(payload))
     })
     socket.on(SocketEvents.TOR_INITIALIZED, () => {

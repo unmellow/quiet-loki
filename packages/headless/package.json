@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node lib/cli.js",
     "prepare": "npm run build",
-    "test": "npm run build && node --test test/shutdown.test.js"
+    "test": "npm run build && node --test test/shutdown.test.js test/status.test.js"
   },
   "dependencies": {
     "@quiet/common": "file:../common",

@@ -5,7 +5,7 @@ import { base58btc } from 'multiformats/bases/base58'
 import { Level } from 'level'
 
 import { type Community, NetworkStats, Identity } from '@quiet/types'
-import { createLibp2pAddress, filterAndSortPeers } from '@quiet/common'
+import { communityForLog, createLibp2pAddress, filterAndSortPeers } from '@quiet/common'
 import { EncryptedAndSignedPayload } from '../auth/services/crypto/types'
 import { LEVEL_DB } from '../const'
 import {
@@ -192,7 +192,7 @@ export class LocalDbService extends EventEmitter {
   }
 
   public async setCommunity(community: Community) {
-    this.logger.info('Setting community', community.id, community.name, community)
+    this.logger.info('Setting community', community.id, community.name, communityForLog(community))
     let communities = await this.get(LocalDBKeys.COMMUNITIES)
     if (!communities) {
       communities = {}

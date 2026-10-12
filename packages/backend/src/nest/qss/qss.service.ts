@@ -1,6 +1,7 @@
 /**
  * Abstraction layer for interacting with QSS
  */
+import { communityForLog } from '@quiet/common'
 import { Mutex } from 'async-mutex'
 import { Server } from '../../../../../3rd-party/auth/packages/auth/dist'
 import { MemberContext } from '../../../../../3rd-party/auth/packages/auth/dist/connection'
@@ -510,7 +511,7 @@ export class QSSService extends EventEmitter implements OnModuleDestroy {
       const teamId = community?.teamId ?? sigChain.team.id
       if (teamId == null) {
         this.logger.warn('Skipping NSE QSS URL update because no active community or team ID found')
-        this.logger.warn('Community', community)
+        this.logger.warn('Community', communityForLog(community))
         return
       }
 

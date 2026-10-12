@@ -1,3 +1,4 @@
+import { redactInviteUrlForLog } from '../secretsLog'
 import {
   InvitationData,
   InvitationDataVersion,
@@ -85,11 +86,13 @@ const parseDeepUrl = ({ url, expectedProtocol = `${DEEP_URL_SCHEME}:` }: ParseDe
   try {
     validUrl = new URL(_url)
   } catch (e) {
-    logger.error(`Could not retrieve invitation data from deep url '${url}'. Reason: ${e.message}`)
+    logger.error(
+      `Could not retrieve invitation data from deep url '${redactInviteUrlForLog(url)}'. Reason: ${e.message}`
+    )
     throw e
   }
   if (!validUrl || validUrl.protocol !== expectedProtocol) {
-    logger.error(`Could not retrieve invitation data from deep url '${url}'`)
+    logger.error(`Could not retrieve invitation data from deep url '${redactInviteUrlForLog(url)}'`)
     throw new Error(`Invalid url`)
   }
 
@@ -147,7 +150,7 @@ export const parseInvitationLinkDeepUrl = (url: string): InvitationData => {
   // in Node and in the renderer alike; the code is then parsed the same way as a pasted bare code.
   const code = stripQuietLokiLinkPrefix(url)
   if (code === null) {
-    logger.error(`Could not retrieve invitation data from deep url '${url}'`)
+    logger.error(`Could not retrieve invitation data from deep url '${redactInviteUrlForLog(url)}'`)
     throw new Error(`Invalid url`)
   }
   return parseDeepUrl({ url: code, expectedProtocol: '' })
@@ -308,10 +311,10 @@ export const argvInvitationLink = (argv: string[]): InvitationData | null => {
   let invitationData: InvitationData | null = null
   for (const arg of argv) {
     if (!arg.startsWith(DEEP_URL_SCHEME_WITH_SEPARATOR)) {
-      logger.warn('Not a deep url, not parsing', arg)
+      logger.warn('Not a deep url, not parsing', redactInviteUrlForLog(arg))
       continue
     }
-    logger.info('Parsing deep url', arg)
+    logger.info('Parsing deep url', redactInviteUrlForLog(arg))
     invitationData = parseInvitationLinkDeepUrl(arg)
     switch (invitationData.version) {
       case InvitationDataVersion.v4:

@@ -93,7 +93,7 @@ node lib/cli.js messages
 | `join -i <url> -u <user>` | Join via invite |
 | `send <text>` | Send to `#general` |
 | `messages [--ids …]` | List/fetch `#general` |
-| `status` | Session + backend PID |
+| `status [--show-secrets]` | Session + backend PID as JSON. `psk`, `inviteSeed` and `inviteSalt` are shown as `"[redacted]"` unless `--show-secrets` is passed (same JSON shape either way; use `invite` to get a shareable link) |
 | `serve` | Keep backend-bundle alive |
 
 
