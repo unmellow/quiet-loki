@@ -11,6 +11,7 @@ import {
   ResponseJoinCommunityPayload,
   SocketActions,
 } from '@quiet/types'
+import { communityResponseForLog } from '@quiet/common'
 import { createLogger } from '../../../utils/logger'
 import { generateId } from '../../../utils/cryptography/cryptography'
 import { usersActions } from '../../users/users.slice'
@@ -64,7 +65,7 @@ export function* joinCommunitySaga(
     socket.emitWithAck,
     applyEmitParams(SocketActions.JOIN_COMMUNITY, payload)
   )
-  logger.debug('Response from backend', response)
+  logger.debug('Response from backend', communityResponseForLog(response))
   if (!response) {
     logger.error('Failed to join community - invalid response from backend')
     yield* put(communitiesActions.clearInvitationCodes())

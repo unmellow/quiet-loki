@@ -6,6 +6,7 @@ import { messagesActions } from '../messages.slice'
 import { generateMessageId, getCurrentTime } from '../utils/message.utils'
 import { type ChannelMessage, MessageType, SendingStatus, SocketActions } from '@quiet/types'
 import { createLogger } from '../../../utils/logger'
+import { identityForLog } from '@quiet/common'
 import { identitySelectors } from '../../identity/identity.selectors'
 import { identityActions } from '../../identity/identity.slice'
 import { waitForChannelSubscriptionSaga } from '../../publicChannels/waitForChannelSubscription.saga'
@@ -21,16 +22,16 @@ export function* sendMessageSaga(
   const id = payload.id || generatedMessageId
   let identity = yield* select(identitySelectors.currentIdentity)
   while (!identity || !identity.userId) {
-    logger.info('Identity not present, waiting for identity to be added.', identity)
+    logger.info('Identity not present, waiting for identity to be added.', identityForLog(identity))
     // This will block until the addNewIdentity action is dispatched.
     const actionIdentity: ReturnType<typeof identityActions.updateIdentity> = yield* take(
       identityActions.updateIdentity
     )
     identity = yield* select(identitySelectors.currentIdentity)
-    logger.info('Identity updated', identity)
+    logger.info('Identity updated', identityForLog(identity))
   }
 
-  logger.info('Identity present', identity)
+  logger.info('Identity present', identityForLog(identity))
 
   const currentChannelId = yield* select(publicChannelsSelectors.currentChannelId)
   const channelId = payload.channelId || currentChannelId
