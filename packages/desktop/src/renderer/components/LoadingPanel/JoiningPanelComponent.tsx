@@ -109,6 +109,8 @@ export interface JoiningPanelComponentProps {
   error?: string
   /** Dismisses the error (clears it and closes the panel). */
   onDismissError?: () => void
+  /** Label of the error dismiss button (e.g. "Back to join" when dismissing also removes a half-joined community). */
+  dismissLabel?: string
 }
 
 const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
@@ -118,6 +120,7 @@ const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
   isOwner,
   error,
   onDismissError,
+  dismissLabel = 'Close',
 }) => {
   logger.info('Generating JoiningPanelComponent with props:', { open, connectionInfo, isOwner, error })
   if (error) {
@@ -144,7 +147,7 @@ const JoiningPanelComponent: React.FC<JoiningPanelComponentProps> = ({
               sx={{ marginTop: 3 }}
               onClick={onDismissError ?? handleClose}
             >
-              Close
+              {dismissLabel}
             </Button>
           </Grid>
         </StyledGrid>

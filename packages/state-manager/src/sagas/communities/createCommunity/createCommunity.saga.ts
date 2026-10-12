@@ -11,6 +11,7 @@ import {
   ResponseCreateCommunityPayload,
   SocketActions,
 } from '@quiet/types'
+import { communityResponseForLog } from '@quiet/common'
 import { createLogger } from '../../../utils/logger'
 import { generateId } from '../../../utils/cryptography/cryptography'
 import { identityActions } from '../../identity/identity.slice'
@@ -89,7 +90,7 @@ export function* createCommunitySaga(
     applyEmitParams(SocketActions.CREATE_COMMUNITY, payload)
   )
 
-  logger.debug('Response from backend', createCommunityResponse)
+  logger.debug('Response from backend', communityResponseForLog(createCommunityResponse))
   if (!createCommunityResponse || !createCommunityResponse.community || !createCommunityResponse.identity) {
     logger.error('Failed to create community - invalid response from backend')
     yield* put(networkActions.setLoadingPanelType(LoadingPanelType.Failed))

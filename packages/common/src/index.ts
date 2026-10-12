@@ -1,4 +1,5 @@
 export * from './invitationLink/invitationLink'
+export * from './identityLog'
 export * from './secretsLog'
 export * from './invitationLink/invitationLink.const'
 export { encodeAuthData } from './invitationLink/invitationLink.validator'
