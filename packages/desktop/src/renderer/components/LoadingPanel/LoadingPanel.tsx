@@ -3,13 +3,14 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useModal } from '../../containers/hooks'
 import { ModalName } from '../../sagas/modals/modals.types'
 import { socketSelectors } from '../../sagas/socket/socket.selectors'
-import { communities, publicChannels, users, connection, network, errors } from '@quiet/state-manager'
+import { communities, publicChannels, users, connection, network, errors, identity } from '@quiet/state-manager'
 import { modalsActions } from '../../sagas/modals/modals.slice'
 import { shell } from 'electron'
 import JoiningPanelComponent from './JoiningPanelComponent'
 import StartingPanelComponent from './StartingPanelComponent'
 import { LoadingPanelType, ErrorCodes, CommunityOwnership } from '@quiet/types'
 import { createLogger } from '../../logger'
+import { clearCurrentCommunity } from '../../clearCommunity'
 
 const logger = createLogger('LoadingPanel')
 
@@ -41,10 +42,26 @@ const LoadingPanel = () => {
     }
   }, [launchError])
 
-  const dismissLaunchError = useCallback(() => {
+  // A launch error before the community was ever joined (no join timestamp yet) leaves a half-joined/half-created
+  // community set as current. Just closing the panel would leave a blank window, so remove that community from the
+  // backend, the store and persisted storage (same path as "Leave community") and go back to the Join screen.
+  const joinTimestamp = useSelector(identity.selectors.joinTimestamp)
+  const isFirstJoinLaunchError = Boolean(launchError && currentCommunity && !joinTimestamp)
+
+  const dismissLaunchError = useCallback(async () => {
     if (launchError) dispatch(errors.actions.clearError(launchError))
     loadingPanelModal.handleClose()
-  }, [launchError])
+    if (!isFirstJoinLaunchError) return
+
+    logger.warn('First launch of the community failed, removing the half-joined community and returning to Join')
+    try {
+      await clearCurrentCommunity()
+    } catch (e) {
+      logger.error('Failed to remove the half-joined community via the backend, resetting the local state only', e)
+      dispatch(communities.actions.resetApp('payload'))
+    }
+    dispatch(modalsActions.openModal({ name: ModalName.joinCommunityModal }))
+  }, [launchError, isFirstJoinLaunchError])
 
   useEffect(() => {
     if (message === LoadingPanelType.Failed) {
@@ -106,7 +123,10 @@ const LoadingPanel = () => {
           connectionInfo={connectionProcessSelector}
           isOwner={owner}
           error={launchError?.message}
-          onDismissError={dismissLaunchError}
+          onDismissError={() => {
+            void dismissLaunchError()
+          }}
+          dismissLabel={isFirstJoinLaunchError ? (owner ? 'Back to start' : 'Back to join') : 'Close'}
         />
       )
     } catch (e) {

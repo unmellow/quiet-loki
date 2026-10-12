@@ -32,3 +32,17 @@ export const clearCommunityWithDependencies = async ({
   remountRoot()
   persistor.persist()
 }
+
+// The renderer entry (index.tsx) owns the persistor and the React root, so it registers the real clearCommunity here.
+// Components import this module instead of index.tsx to avoid pulling the entry (and its side effects) into their
+// import graph.
+let registeredClearCommunity: (() => Promise<void>) | null = null
+
+export const registerClearCommunity = (clear: (() => Promise<void>) | null): void => {
+  registeredClearCommunity = clear
+}
+
+export const clearCurrentCommunity = async (): Promise<void> => {
+  if (!registeredClearCommunity) throw new Error('clearCommunity is not registered')
+  await registeredClearCommunity()
+}
