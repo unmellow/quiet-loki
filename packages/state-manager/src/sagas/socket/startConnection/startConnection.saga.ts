@@ -1,4 +1,4 @@
-import { redactSecretsForLog } from '@quiet/common'
+import { createLibp2pAddress, redactSecretsForLog } from '@quiet/common'
 import { eventChannel } from 'redux-saga'
 import { type Socket } from '../../../types'
 import { all, call, fork, put, takeEvery, cancelled } from 'typed-redux-saga'
@@ -42,6 +42,7 @@ import {
   InviteResultWithSalt,
   UpdateCommunityPayload,
   type SetChannelPermissionsPayload,
+  type SelfAddressChangedPayload,
 } from '@quiet/types'
 
 import { createLogger } from '../../../utils/logger'
@@ -92,6 +93,7 @@ export function subscribe(socket: Socket) {
     | ReturnType<typeof connectionActions.onConnectionProcessInfo>
     | ReturnType<typeof connectionActions.createInvite>
     | ReturnType<typeof connectionActions.setLongLivedInvite>
+    | ReturnType<typeof connectionActions.setSelfAddress>
     | ReturnType<typeof communitiesActions.clearInvitationCodes>
     | ReturnType<typeof connectionActions.setTorInitialized>
     | ReturnType<typeof connectionActions.setQssConnected>
@@ -117,6 +119,10 @@ export function subscribe(socket: Socket) {
     socket.on(SocketEvents.COMMUNITY_UPDATED, (payload: UpdateCommunityPayload) => {
       logger.info(`${SocketEvents.COMMUNITY_UPDATED}`, redactSecretsForLog(payload))
       emit(communitiesActions.updateCommunityData(payload))
+    })
+    socket.on(SocketEvents.SELF_ADDRESS_CHANGED, (payload: SelfAddressChangedPayload) => {
+      logger.info(`${SocketEvents.SELF_ADDRESS_CHANGED}`, payload.address)
+      emit(connectionActions.setSelfAddress(createLibp2pAddress(payload.address, payload.peerId)))
     })
     socket.on(SocketEvents.TOR_INITIALIZED, () => {
       logger.info(`${SocketEvents.TOR_INITIALIZED}`)
@@ -272,6 +278,7 @@ export function subscribe(socket: Socket) {
       socket.off(SocketEvents.MESSAGE_IDS_STORED)
       socket.off(SocketEvents.MESSAGES_STORED)
       socket.off(SocketEvents.CREATED_LONG_LIVED_LFA_INVITE)
+      socket.off(SocketEvents.SELF_ADDRESS_CHANGED)
       socket.off(SocketEvents.ERROR)
       socket.off(SocketEvents.USERS_UPDATED)
       socket.off(SocketEvents.USERS_REMOVED)

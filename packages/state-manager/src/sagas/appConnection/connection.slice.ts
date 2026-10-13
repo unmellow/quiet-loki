@@ -26,6 +26,8 @@ export class ConnectionState {
   }
   public longLivedInvite: InviteResultWithSalt | undefined = undefined
   public p2pEnabled: boolean = true
+  /** Our current overlay multiaddr as last reported by the backend this session (wins over stale identity/profile) */
+  public selfAddress: string | undefined = undefined
 }
 
 export const connectionSlice = createSlice({
@@ -68,6 +70,9 @@ export const connectionSlice = createSlice({
     },
     setLongLivedInvite: (state, action: PayloadAction<InviteResultWithSalt | undefined>) => {
       state.longLivedInvite = action.payload
+    },
+    setSelfAddress: (state, action: PayloadAction<string | undefined>) => {
+      state.selfAddress = action.payload
     },
     setSocketIOSecret: (state, action: PayloadAction<string>) => {
       state.socketIOSecret = action.payload

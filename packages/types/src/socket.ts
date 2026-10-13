@@ -45,6 +45,7 @@ import {
   InviteResultWithSalt,
   JoinCommunityPayload,
   UpdateCommunityPayload,
+  SelfAddressChangedPayload,
 } from './community'
 import { ErrorPayload } from './errors'
 import { HCaptchaChallengeRequest, HCaptchaFormResponse, HCaptchaRequest } from './captcha'
@@ -130,6 +131,7 @@ export enum SocketEvents {
   // ====== Community ======
   COMMUNITY_LAUNCHED = 'communityLaunched',
   COMMUNITY_UPDATED = 'communityUpdated',
+  SELF_ADDRESS_CHANGED = 'selfAddressChanged',
 
   // ====== Channels ======
   CHANNEL_SUBSCRIBED = 'channelSubscribed',
@@ -254,6 +256,7 @@ export interface SocketEventsMap {
   // ====== Community ======
   [SocketEvents.COMMUNITY_LAUNCHED]: EmitEvent<LaunchCommunityPayload>
   [SocketEvents.COMMUNITY_UPDATED]: EmitEvent<UpdateCommunityPayload>
+  [SocketEvents.SELF_ADDRESS_CHANGED]: EmitEvent<SelfAddressChangedPayload>
 
   // ====== Channels ======
   [SocketEvents.CHANNEL_SUBSCRIBED]: EmitEvent<ChannelSubscribedPayload>
