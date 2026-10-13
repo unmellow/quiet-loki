@@ -29,6 +29,7 @@ import {
 } from './invitationLink.const'
 import { isPSKcodeValid } from '../libp2p'
 import { createLogger } from '../logger'
+import { redactInviteUrlForLog } from '../secretsLog'
 
 import base64url from 'base64url'
 
@@ -177,7 +178,7 @@ const validatePeerPairsFromUrlParams = (url: string, unnamedParams: URLSearchPar
   })
 
   if (pairs.length === 0) {
-    throw new Error(`No valid peer addresses found in invitation link '${url}'`)
+    throw new Error(`No valid peer addresses found in invitation link '${redactInviteUrlForLog(String(url))}'`)
   }
 
   return pairs
