@@ -1,6 +1,7 @@
 import { apply, select, putResolve, delay } from 'typed-redux-saga'
 import { type PayloadAction } from '@reduxjs/toolkit'
 
+import { redactSecretsForLog } from '@quiet/common'
 import { InviteResultWithSalt, SocketActions } from '@quiet/types'
 
 import { applyEmitParams, type Socket } from '../../../types'
@@ -20,8 +21,8 @@ export function* createInviteSaga(
     socket.emitWithAck,
     applyEmitParams(SocketActions.VALIDATE_OR_CREATE_LONG_LIVED_LFA_INVITE, { id: existingLongLivedInvite?.id })
   )
-  logger.info('existingLongLivedInvite', JSON.stringify(existingLongLivedInvite, null, 2))
-  logger.info('lfaInviteData', JSON.stringify(lfaInviteData, null, 2))
+  logger.info('existingLongLivedInvite', JSON.stringify(redactSecretsForLog(existingLongLivedInvite), null, 2))
+  logger.info('lfaInviteData', JSON.stringify(redactSecretsForLog(lfaInviteData), null, 2))
   if (!lfaInviteData?.valid && lfaInviteData?.newInvite != null) {
     yield* putResolve(connectionActions.setLongLivedInvite(lfaInviteData.newInvite))
   } else if (!lfaInviteData?.valid && lfaInviteData?.newInvite == null) {

@@ -1,4 +1,4 @@
-import { redactInviteUrlForLog } from '../secretsLog'
+import { redactInviteUrlForLog, redactSecretsForLog } from '../secretsLog'
 import {
   InvitationData,
   InvitationDataVersion,
@@ -101,7 +101,8 @@ const parseDeepUrl = ({ url, expectedProtocol = `${DEEP_URL_SCHEME}:` }: ParseDe
   const psk = params.get(PSK_PARAM_KEY)
   const authData = params.get(AUTH_DATA_KEY)
   const version = params.get(VERSION_KEY)
-  if (!psk && !authData && !version) throw new Error(`Invitation link does not match either v4 or v5 format '${url}'`)
+  if (!psk && !authData && !version)
+    throw new Error(`Invitation link does not match either v4 or v5 format '${redactInviteUrlForLog(url)}'`)
 
   let data: InvitationData | null = null
   if (version === InvitationDataVersion.v4) {
@@ -112,9 +113,9 @@ const parseDeepUrl = ({ url, expectedProtocol = `${DEEP_URL_SCHEME}:` }: ParseDe
     throw new Error(`Unknown or deprecated invitation was processed! (version = ${version})`)
   }
 
-  if (!data) throw new Error(`Could not parse invitation data from deep url '${url}'`)
+  if (!data) throw new Error(`Could not parse invitation data from deep url '${redactInviteUrlForLog(url)}'`)
 
-  logger.info(`Invitation data '${JSON.stringify(data)}' parsed`)
+  logger.info(`Invitation data '${JSON.stringify(redactSecretsForLog(data))}' parsed`)
   return data
 }
 
