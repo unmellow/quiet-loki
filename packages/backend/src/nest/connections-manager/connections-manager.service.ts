@@ -907,6 +907,13 @@ export class ConnectionsManagerService extends EventEmitter implements OnModuleI
             `invites for the old address will no longer work`
         )
         await this.persistSelfAddressChange(communityId, identity, storedAddress, result.address)
+        // Refresh the invite now: the renderer builds it from its (stale) identity / own profile, which otherwise only
+        // catches up once the updated own profile replicates back (~70s).
+        this.serverIoProvider.io.emit(SocketEvents.SELF_ADDRESS_CHANGED, {
+          communityId,
+          peerId: identity.networkInfo.peerId.id,
+          address: result.address,
+        })
         break
       case 'unchanged':
         break

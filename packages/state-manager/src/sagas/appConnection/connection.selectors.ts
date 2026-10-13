@@ -46,12 +46,15 @@ export const peerStats = createSelector(connectionSlice, reducerState => {
   return stats
 })
 
+export const selfAddress = createSelector(connectionSlice, reducerState => reducerState.selfAddress)
+
 export const peerList = createSelector(
   userProfileSelectors.userProfiles,
   identitySelectors.currentPeerAddress,
   peerStats,
   connectedPeers,
-  (userProfiles, localPeerAddress, stats, connectedPeers) => {
+  selfAddress,
+  (userProfiles, localPeerAddress, stats, connectedPeers, backendSelfAddress) => {
     let arr: string[] = []
     if (userProfiles) {
       const profiles = Object.values(userProfiles)
@@ -69,10 +72,17 @@ export const peerList = createSelector(
     // when it exists it replaces the local address instead of being listed after it (r6664: dead address came first).
     const ownPeerId = localPeerAddress?.split('/p2p/')[1]
     const ownProfileAddress = ownPeerId ? arr.find(address => address.endsWith(`/p2p/${ownPeerId}`)) : undefined
+    // The backend reports a detected SNApp address change right away (SELF_ADDRESS_CHANGED); that beats both the
+    // identity and our own profile, which only catches up once it replicates back.
+    const ownBackendAddress =
+      ownPeerId && backendSelfAddress?.endsWith(`/p2p/${ownPeerId}`) ? backendSelfAddress : undefined
+    if (ownBackendAddress) {
+      arr = [ownBackendAddress, ...arr.filter(address => !address.endsWith(`/p2p/${ownPeerId}`))]
+    }
     const filteredAndSortedPeers = filterAndSortPeers(
       arr,
       stats,
-      ownProfileAddress ?? localPeerAddress,
+      ownBackendAddress ?? ownProfileAddress ?? localPeerAddress,
       true,
       connectedPeers
     )
@@ -161,6 +171,7 @@ export const connectionSelectors = {
   peerList,
   invitationUrl,
   longLivedInvite,
+  selfAddress,
   torBootstrapProcess,
   connectionProcess,
   isTorInitialized,

@@ -322,6 +322,32 @@ describe('ConnectionsManagerService', () => {
       expect((await localDbService.getPeerStats(ownPeerId))?.address).toBe(newSelf)
     })
 
+    it('tells the frontend about a changed SNApp address right away so the invite is refreshed', async () => {
+      await storageService.setIdentity(userIdentity)
+      await localDbService.setCommunity(community)
+      jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(`${NEW_SNAPP}.loki`)
+      jest.spyOn(storageService, 'updateSelfProfileAddress').mockResolvedValue(false)
+      const emitSpy = jest.spyOn(serverIoProvider.io, 'emit')
+
+      await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
+
+      expect(emitSpy).toHaveBeenCalledWith(SocketEvents.SELF_ADDRESS_CHANGED, {
+        communityId: community.id,
+        peerId: userIdentity.networkInfo.peerId.id,
+        address: NEW_SNAPP,
+      })
+    })
+
+    it('does not emit SELF_ADDRESS_CHANGED when the SNApp address is unchanged', async () => {
+      const stored = userIdentity.networkInfo.hiddenService.onionAddress
+      jest.spyOn(tor, 'registerHiddenService').mockResolvedValue(stored)
+      const emitSpy = jest.spyOn(serverIoProvider.io, 'emit')
+
+      await connectionsManagerService.spawnTorHiddenService(community.id, userIdentity)
+
+      expect(emitSpy).not.toHaveBeenCalledWith(SocketEvents.SELF_ADDRESS_CHANGED, expect.anything())
+    })
+
     it('launch listens on and announces the current SNApp address after a change', async () => {
       await storageService.setIdentity(userIdentity)
       await localDbService.setCommunity(community)

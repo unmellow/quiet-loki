@@ -18,6 +18,8 @@ export const ConnectionTransform = createTransform(
       isTorInitialized: false,
       socketIOSecret: null,
       p2pEnabled: true,
+      // only valid for the backend session that reported it
+      selfAddress: undefined,
     }
   },
   { whitelist: [StoreKeys.Connection] }

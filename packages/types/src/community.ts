@@ -105,6 +105,14 @@ export interface ResponseLeaveCommunityPayload {
   id: string
 }
 
+/** Backend -> frontend: our own overlay (Lokinet SNApp) address changed; invites must use the new one right away. */
+export interface SelfAddressChangedPayload {
+  communityId: string
+  peerId: string
+  /** New overlay address (normalized, without the .loki suffix) */
+  address: string
+}
+
 // ----- Invites -----
 export interface RequestInvitePayload {
   id: Base58 | undefined
